@@ -27,7 +27,10 @@ export default {
 			}
 		}),
 
-        replace({PUBLIC_URL: production ? '/cnn-explainer' : ''}),
+		// Assets are referenced relative to index.html, which keeps the build
+		// working both at a domain root (local `npm start`) and under a project
+		// subpath such as GitHub Pages' /dnn-explainer/.
+		replace({PUBLIC_URL: '.'}),
 
 		// If you have external dependencies installed from
 		// npm, you'll most likely need these plugins. In

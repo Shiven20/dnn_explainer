@@ -1,89 +1,107 @@
-# CNN Explainer
+# DNN Explainer
 
-An interactive visualization system designed to help non-experts learn about Convolutional Neural Networks (CNNs)
+An interactive visualization for learning how dense (fully connected) neural
+networks turn raw numbers into a prediction.
 
-[![build](https://github.com/poloclub/cnn-explainer/workflows/build/badge.svg)](https://github.com/poloclub/cnn-explainer/actions)
-[![arxiv badge](https://img.shields.io/badge/arXiv-2004.15004-red)](http://arxiv.org/abs/2004.15004)
-[![DOI:10.1109/TVCG.2020.3030418](https://img.shields.io/badge/DOI-10.1109/TVCG.2020.3030418-blue)](https://doi.org/10.1109/TVCG.2020.3030418)
+Every value on screen is real: the page loads actual trained weights and runs
+the forward pass in the browser, so the arithmetic shown in the detail panels is
+the arithmetic the model performed.
 
-<a href="https://youtu.be/HnWIHWFbuUQ" target="_blank"><img src="https://i.imgur.com/sCsudVg.png" style="max-width:100%;"></a>
+## What you can do
 
-For more information, check out our manuscript:
+- **Draw the input.** Click or drag on the 5 x 5 grid to redraw the glyph. The
+  network re-runs on every change, so predictions update as you draw.
+- **Inspect any neuron.** Click a neuron to see its weighted sum term by term:
+  each input, the weight applied to it, and the resulting product.
+- **See ReLU decide.** Hidden-neuron panels plot where that neuron's score lands
+  on the ReLU curve. Neurons clipped to zero are outlined in dashed red.
+- **Follow the softmax.** The softmax panel shows logits, their exponentials, and
+  how those normalize into probabilities.
+- **Trace connections.** Hover a neuron to highlight its edges, coloured by
+  weight sign and weighted by magnitude.
 
-[**CNN Explainer: Learning Convolutional Neural Networks with Interactive Visualization**](https://arxiv.org/abs/2004.15004).
-Wang, Zijie J., Robert Turko, Omar Shaikh, Haekyu Park, Nilaksh Das, Fred Hohman, Minsuk Kahng, and Duen Horng Chau.
-*IEEE Transactions on Visualization and Computer Graphics (TVCG), 2020.*
+## The model
 
-## Live Demo
+A 4-layer classifier that sorts a 5 x 5 binary glyph into one of four shapes
+(L, T, X, O ring):
 
-For a live demo, visit: http://poloclub.github.io/cnn-explainer/
+| Layer | Size | Activation | Parameters |
+| --- | --- | --- | --- |
+| Input | 25 | -- | 0 |
+| Hidden 1 | 10 | ReLU | 260 |
+| Hidden 2 | 8 | ReLU | 88 |
+| Output | 4 | Softmax | 36 |
 
-## Running Locally
+384 parameters in total. The input is deliberately tiny so that the whole
+network, weights included, fits on one screen.
 
-Clone or download this repository:
+The four classes are visually distinct, so the task is easy and the model scores
+100% on a held-out split. That is intentional for a teaching tool: predictable
+behaviour is easier to learn from than confusing errors.
 
-```bash
-git clone git@github.com:poloclub/cnn-explainer.git
-
-# use degit if you don't want to download commit histories
-degit poloclub/cnn-explainer
-```
-
-Install the dependencies:
+## Running locally
 
 ```bash
 npm install
-```
-
-Then run CNN Explainer:
-
-```bash
 npm run dev
 ```
 
-Navigate to [localhost:3000](https://localhost:3000). You should see CNN Explainer running in your broswer :)
+Then open [localhost:3000](http://localhost:3000).
 
-To see how we trained the CNN, visit the directory [`./tiny-vgg/`](tiny-vgg).
-If you want to use CNN Explainer with your own CNN model or image classes, see [#8](/../../issues/8) and [#14](/../../issues/14).
+## Retraining
+
+The model is trained by a dependency-free Node script:
+
+```bash
+npm run train
+```
+
+It builds the dataset, trains with mini-batch gradient descent, reports
+accuracy, and writes `public/assets/data/dnn_model.json` — the exact file the
+page loads. Change the layer sizes in `dnn-mlp/train.js` and the diagram adapts
+to the new architecture on reload.
+
+To check that the browser engine agrees with the trainer:
+
+```bash
+npm run verify
+```
+
+This imports `src/utils/dnn.js` (the module the app actually ships) and asserts
+graph construction, weight orientation, ReLU and softmax semantics, the detail
+view arithmetic, and end-to-end accuracy.
+
+## Project layout
+
+```
+dnn-mlp/
+  glyphs.js            dataset definition and augmentation
+  train.js             trainer, exports dnn_model.json
+  verify.mjs           checks the browser engine against the weights
+src/
+  utils/dnn.js         neuron graph + forward pass
+  overview/
+    Overview.svelte    the main diagram
+    dnn-layout.js      geometry and colour scales
+    Modal.svelte
+  detail-view/
+    WeightedSumView.svelte   weighted sum, term by term
+    ReluView.svelte          weighted sum + ReLU curve
+    Softmaxview.svelte       logits -> probabilities
+  article/Article.svelte     explanatory text
+```
 
 ## Credits
 
-CNN Explainer was created by
-<a href="https://zijie.wang/">Jay Wang</a>,
-<a href="https://www.linkedin.com/in/robert-turko/">Robert Turko</a>,
-<a href="http://oshaikh.com/">Omar Shaikh</a>,
-<a href="https://haekyu.com/">Haekyu Park</a>,
-<a href="http://nilakshdas.com/">Nilaksh Das</a>,
-<a href="https://fredhohman.com/">Fred Hohman</a>,
-<a href="http://minsuk.com">Minsuk Kahng</a>, and
-<a href="https://www.cc.gatech.edu/~dchau/">Polo Chau</a>,
-which was the result of a research collaboration between
-Georgia Tech and Oregon State.
+Adapted from [CNN Explainer](https://github.com/poloclub/cnn-explainer) by Jay
+Wang, Robert Turko, Omar Shaikh, Haekyu Park, Nilaksh Das, Fred Hohman, Minsuk
+Kahng, and Polo Chau — a collaboration between Georgia Tech and Oregon State.
+The visual language and interaction model come from their work; the network,
+dataset, and detail views here were rebuilt for dense networks.
 
-We thank
-[Anmol Chhabria](https://www.linkedin.com/in/anmolchhabria),
-[Kaan Sancak](https://kaansancak.com),
-[Kantwon Rogers](https://www.kantwon.com), and the
-[Georgia Tech Visualization Lab](http://vis.gatech.edu)
-for their support and constructive feedback.
-
-## Citation
-
-```bibTeX
-@article{wangCNNExplainerLearning2020,
-  title = {{{CNN Explainer}}: {{Learning Convolutional Neural Networks}} with {{Interactive Visualization}}},
-  shorttitle = {{{CNN Explainer}}},
-  author = {Wang, Zijie J. and Turko, Robert and Shaikh, Omar and Park, Haekyu and Das, Nilaksh and Hohman, Fred and Kahng, Minsuk and Chau, Duen Horng},
-  journal={IEEE Transactions on Visualization and Computer Graphics (TVCG)},
-  year={2020},
-  publisher={IEEE}
-}
-```
+Original paper: [CNN Explainer: Learning Convolutional Neural Networks with
+Interactive Visualization](https://arxiv.org/abs/2004.15004) (IEEE TVCG, 2020).
 
 ## License
 
-The software is available under the [MIT License](https://github.com/poloclub/cnn-explainer/blob/master/LICENSE).
-
-## Contact
-
-If you have any questions, feel free to [open an issue](https://github.com/poloclub/cnn-explainer/issues/new/choose) or contact [Jay Wang](https://zijie.wang).
+MIT, same as the original project. See [LICENSE](LICENSE).

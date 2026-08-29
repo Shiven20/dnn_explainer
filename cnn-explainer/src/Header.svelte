@@ -1,105 +1,84 @@
 <script>
+  /** Slim app bar. Kept minimal so the network stays the visual centrepiece. */
 </script>
 
 <style>
-	#header {
-		height: 50px;
-		display: flex;
-		padding: 0 20px;
-		align-items: center;
-		background: rgb(30, 30, 30);
+  header {
+    display: flex;
+    align-items: center;
     justify-content: space-between;
-	}
+    gap: 16px;
+    padding: 0 24px;
+    height: 56px;
+    background: var(--dnn-surface);
+    border-bottom: 1px solid var(--dnn-border);
+    position: sticky;
+    top: 0;
+    z-index: 20;
+  }
 
-	#logo {
-		display: flex;
-		align-items: center;
-	}
+  .brand {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    min-width: 0;
+  }
 
-	#logo-text {
-		font-size: 30px;
-		color: var(--light-gray);
-		font-family: 'A Love of Thunder';
-		margin-right: 10px;
-	}
+  .title {
+    font-size: 16px;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+    color: var(--dnn-ink);
+    white-space: nowrap;
+  }
 
-	#svg-logo-tagline {
-		font-size: 23px;
-		fill: rgb(255, 255, 255);
-		dominant-baseline: baseline;
-		font-family: 'Neucha';
-	}
+  .tagline {
+    font-size: 13px;
+    color: var(--dnn-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 
-	.icons {
-		display: flex;
-		justify-content: flex-start;
-		align-items: center;
-	}
+  .mark {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+  }
 
-	.icon {
-		width: 27px;
-		height: 27px;
-		margin-left: 15px;
-	}
+  a {
+    font-size: 13px;
+    color: var(--dnn-muted);
+    text-decoration: none;
+    white-space: nowrap;
+  }
 
-	.icon a{
-		width: 100%;
-		height: 100%;
-	}
+  a:hover { color: var(--dnn-accent); }
 
-	.icon img {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-	}
+  @media (max-width: 620px) {
+    header { padding: 0 16px; }
+    .tagline { display: none; }
+  }
 </style>
 
-<div id="header">
+<header>
+  <div class="mark">
+    <!-- Three connected nodes: a miniature of the diagram below. -->
+    <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
+      <line x1="5" y1="6" x2="17" y2="11" stroke="var(--dnn-accent)" stroke-width="1.2" opacity="0.55" />
+      <line x1="5" y1="16" x2="17" y2="11" stroke="var(--dnn-accent)" stroke-width="1.2" opacity="0.55" />
+      <circle cx="5" cy="6" r="3" fill="var(--dnn-accent)" opacity="0.35" />
+      <circle cx="5" cy="16" r="3" fill="var(--dnn-accent)" opacity="0.35" />
+      <circle cx="17" cy="11" r="3.4" fill="var(--dnn-accent)" />
+    </svg>
 
-  <div id="logo">
-    <div id="logo-text">
-      CNN Explainer
+    <div class="brand">
+      <span class="title">DNN Explainer</span>
+      <span class="tagline">Learn how a neural network thinks, one neuron at a time</span>
     </div>
-
-		<svg width="510px" height="50px">
-			<defs>
-				<filter x="0%" y="0%" width="100%" height="100%" filterUnits="objectBoundingBox" id="chalk-texture">
-					<feTurbulence type="fractalNoise" baseFrequency="2" numOctaves="5" stitchTiles="stitch" result="f1">
-					</feTurbulence>
-					<feColorMatrix type="matrix" values="0 0 0 0 0, 0 0 0 0 0, 0 0 0 0 0, 0 0 0 -1.5 1.5" result="f2">
-					</feColorMatrix>
-					<feComposite operator="in" in2="f2" in="SourceGraphic" result="f3">
-					</feComposite>
-				</filter>
-			</defs>
-
-			<g filter="url(#chalk-texture)" transform="translate(0, 35)">
-				<text id="svg-logo-tagline">
-					Learn Convolutional Neural Network (CNN) in your browser! 
-				</text>
-			</g>
-		</svg>
   </div>
 
-	<div class="icons">
-	
-		<div class="icon" title="Research paper">
-			<a target="_blank" href="https://arxiv.org/abs/2004.15004">
-				<img src="PUBLIC_URL/assets/img/pdf.png" alt="pdf icon"/>
-			</a>
-		</div>
-
-		<div class="icon" title="Demo video">
-			<a target="_blank" href="https://youtu.be/HnWIHWFbuUQ">
-				<img src="PUBLIC_URL/assets/img/youtube.png" alt="youtube icon"/>
-			</a>
-		</div>
-
-		<div class="icon" title="Open-source code">
-			<a target="_blank" href="https://github.com/poloclub/cnn-explainer">
-				<img src="PUBLIC_URL/assets/img/github.png" alt="github icon"/>
-			</a>
-		</div>
-
-	</div>
-</div>
+  <a href="https://github.com/poloclub/cnn-explainer" target="_blank" rel="noreferrer">
+    Based on CNN Explainer
+  </a>
+</header>
