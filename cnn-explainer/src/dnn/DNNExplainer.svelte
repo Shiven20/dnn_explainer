@@ -11,9 +11,12 @@
   import Network from './components/Network.svelte';
   import InputPanel from './components/InputPanel.svelte';
   import PlaybackControls from './components/PlaybackControls.svelte';
+  import NeuronDetails from './components/NeuronDetails.svelte';
+  import ConnectionDetails from './components/ConnectionDetails.svelte';
 
   import {
-    activatedNetwork, prediction, parameterCount, weightMagnitude, spec, reseedNetwork
+    activatedNetwork, prediction, parameterCount, weightMagnitude, spec,
+    selectedNeuron, selectedConnection, reseedNetwork
   } from './stores.js';
 
   import {
@@ -99,9 +102,11 @@
 
   .formula-strip .arrow { color: var(--dnn-muted); }
 
+  /* The rail has to fit the neuron panel's five-column term table without
+     cramping it, which sets the 320px floor. */
   .workspace {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 270px;
+    grid-template-columns: minmax(0, 1fr) 320px;
     gap: 20px;
     align-items: start;
   }
@@ -447,7 +452,25 @@
     </div>
 
     <div class="side">
-      <InputPanel />
+      <!--
+        The inspection panel replaces the input editor while something is
+        selected. They compete for the same column, and showing both at once in
+        a 270px rail makes each of them cramped.
+      -->
+      {#if $selectedNeuron !== undefined}
+        <NeuronDetails
+          layerIndex={$selectedNeuron.layerIndex}
+          index={$selectedNeuron.index}
+        />
+      {:else if $selectedConnection !== undefined}
+        <ConnectionDetails
+          targetLayerIndex={$selectedConnection.targetLayerIndex}
+          sourceIndex={$selectedConnection.sourceIndex}
+          targetIndex={$selectedConnection.targetIndex}
+        />
+      {:else}
+        <InputPanel />
+      {/if}
     </div>
   </div>
 
@@ -487,8 +510,8 @@
   </div>
 
   <p class="next-note">
-    Hover a neuron to trace its connections. Clicking one selects it — the
-    per-neuron arithmetic breakdown, editable weights, activation switcher and
-    architecture controls arrive in the next phases.
+    Click any neuron to see exactly how its value was computed, or click a
+    connection to inspect and edit its weight. The activation switcher and
+    architecture controls arrive in the next phase.
   </p>
 </div>
