@@ -1,21 +1,23 @@
 <script>
-  import Explainer from './Explainer.svelte';
   import Header from './Header.svelte';
+  import DNNExplainer from './dnn/DNNExplainer.svelte';
 </script>
 
 <style>
+  #app-page {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  main {
+    flex: 1;
+  }
 </style>
 
 <div id="app-page">
-  <recommender-overlay
-    my-brand="CNN Explainer"
-    brands-to-ignore="CNN 101"
-    recommendation-count="10"
-    similar-candidate-count="15"
-    position-left="30"
-    display-delay="30000"
-    homepage-url="https://poloclub.github.io/"
-  />
   <Header />
-  <Explainer />
+  <main>
+    <DNNExplainer />
+  </main>
 </div>
