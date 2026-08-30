@@ -182,3 +182,118 @@ export const getActivationRanges = (network) =>
     const max = layer.neurons.reduce((acc, n) => Math.max(acc, Math.abs(n.output)), 0);
     return max === 0 ? 1 : max;
   });
+
+/**
+ * Trace every connection that fed into a given neuron, all the way back to the
+ * input layer.
+ *
+ * Answers "where did this value come from?". A neuron's value depends on its own
+ * incoming connections, but those depend on the previous layer's values, which
+ * depend on *their* connections -- so the honest answer is a whole subgraph, not
+ * a single row of weights.
+ *
+ * Connections whose source contributes nothing (a dead ReLU unit, or a zero
+ * weight) are reported separately, because they are part of the structure but
+ * carry no information for the current input. Showing them identically to live
+ * connections would overstate what is actually flowing.
+ *
+ * @param {object} network A network that has been through forwardPass.
+ * @param {number} layerIndex Neuron's layer.
+ * @param {number} neuronIndex Neuron's index within that layer.
+ * @returns {{active: Set<string>, inactive: Set<string>, layers: number[]}}
+ *   Connection keys in "targetLayer:source:target" form, matching the ids the
+ *   visualization uses.
+ */
+export const traceUpstream = (network, layerIndex, neuronIndex) => {
+  const active = new Set();
+  const inactive = new Set();
+  const touchedLayers = new Set();
+
+  if (network === undefined || layerIndex <= 0) {
+    return { active, inactive, layers: [] };
+  }
+
+  /*
+   * Walk backwards a layer at a time rather than recursing per neuron: a neuron
+   * is typically reached by many paths, and revisiting it once per path would be
+   * exponential. A frontier set visits each neuron at most once per layer.
+   */
+  let frontier = new Set([neuronIndex]);
+
+  for (let l = layerIndex; l > 0; l--) {
+    const layer = network.layers[l];
+    const prevLayer = network.layers[l - 1];
+    const nextFrontier = new Set();
+    touchedLayers.add(l);
+
+    frontier.forEach((targetIndex) => {
+      const neuron = layer.neurons[targetIndex];
+      if (neuron === undefined) return;
+
+      neuron.weights.forEach((weight, sourceIndex) => {
+        const source = prevLayer.neurons[sourceIndex];
+        if (source === undefined) return;
+
+        const key = `${l}:${sourceIndex}:${targetIndex}`;
+        const carries = weight !== 0 && source.output !== 0;
+
+        if (carries) {
+          active.add(key);
+          // Only follow connections that actually carry a value; a dead source
+          // contributes nothing, so its own history is irrelevant here.
+          nextFrontier.add(sourceIndex);
+        } else {
+          inactive.add(key);
+        }
+      });
+    });
+
+    frontier = nextFrontier;
+    if (frontier.size === 0) break;
+  }
+
+  return {
+    active,
+    inactive,
+    layers: [...touchedLayers].sort((a, b) => a - b)
+  };
+};
+
+/**
+ * Trace upstream from a single connection.
+ *
+ * The connection itself is included, plus everything that fed its source neuron.
+ * This is what "show me where this weight's input came from" means.
+ */
+export const traceConnectionUpstream = (network, targetLayerIndex, sourceIndex, targetIndex) => {
+  const key = `${targetLayerIndex}:${sourceIndex}:${targetIndex}`;
+
+  if (network === undefined || targetLayerIndex <= 0) {
+    return { active: new Set(), inactive: new Set(), layers: [], self: key };
+  }
+
+  // Everything feeding the source neuron of this connection.
+  const upstream = traceUpstream(network, targetLayerIndex - 1, sourceIndex);
+
+  const layer = network.layers[targetLayerIndex];
+  const prevLayer = network.layers[targetLayerIndex - 1];
+  const neuron = layer === undefined ? undefined : layer.neurons[targetIndex];
+  const source = prevLayer === undefined ? undefined : prevLayer.neurons[sourceIndex];
+
+  const carries =
+    neuron !== undefined && source !== undefined &&
+    neuron.weights[sourceIndex] !== 0 && source.output !== 0;
+
+  if (carries) upstream.active.add(key);
+  else upstream.inactive.add(key);
+
+  const layers = new Set(upstream.layers);
+  layers.add(targetLayerIndex);
+
+  return {
+    active: upstream.active,
+    inactive: upstream.inactive,
+    layers: [...layers].sort((a, b) => a - b),
+    self: key
+  };
+};

@@ -18,17 +18,39 @@
   export let radius = 20;
   export let highlighted = false;
   export let dimmed = false;
+  /** The specific connection the user selected, emphasised above its trace. */
+  export let selected = false;
+  /**
+   * Structurally part of the trace but carrying nothing for this input (a zero
+   * weight, or a source neuron switched off). Drawn dashed so it is visibly
+   * present but distinguishable from a live contribution.
+   */
+  export let muted = false;
 
   $: path = connectionPath(source, target, radius);
-  $: stroke = highlighted ? '#1f2933' : connectionColor(weight, magnitude);
-  $: strokeWidth = highlighted
-    ? Math.max(2, connectionWidth(weight, magnitude))
-    : connectionWidth(weight, magnitude);
+
+  $: stroke = selected
+    ? 'var(--dnn-accent, #2f6df6)'
+    : highlighted
+      ? connectionColor(weight, magnitude)
+      : connectionColor(weight, magnitude);
+
+  $: strokeWidth = selected
+    ? Math.max(3, connectionWidth(weight, magnitude) + 1)
+    : highlighted
+      ? Math.max(2, connectionWidth(weight, magnitude))
+      : connectionWidth(weight, magnitude);
+
   $: opacity = dimmed
     ? 0.05
-    : highlighted
-      ? 0.95
-      : connectionOpacity(weight, magnitude);
+    : muted
+      ? 0.28
+      : selected || highlighted
+        ? 0.95
+        : connectionOpacity(weight, magnitude);
+
+  // Dashes mark a connection that exists but is not carrying anything.
+  $: dashArray = muted ? '3 3' : null;
 </script>
 
 <style>
@@ -41,4 +63,10 @@
   }
 </style>
 
-<path d={path} {stroke} stroke-width={strokeWidth} {opacity} />
+<path
+  d={path}
+  {stroke}
+  stroke-width={strokeWidth}
+  {opacity}
+  stroke-dasharray={dashArray}
+/>

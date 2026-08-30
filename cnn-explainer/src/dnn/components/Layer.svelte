@@ -23,6 +23,12 @@
   export let pending = false;
   /** This layer is taking its values right now: emphasise briefly. */
   export let settling = false;
+  /**
+   * Optional predicate (index) => boolean marking neurons outside the current
+   * upstream trace, so the contributing path stands out. Undefined when no
+   * trace is open.
+   */
+  export let isOutsideTrace = undefined;
   export let onSelectNeuron = () => {};
   export let onHoverNeuron = () => {};
   export let onLeaveNeuron = () => {};
@@ -78,11 +84,12 @@
       {signed}
       {pending}
       showValue={showValues}
+      dimmed={dimmedNeurons ||
+        (isOutsideTrace !== undefined && isOutsideTrace(i))}
       selected={selectedNeuron !== undefined &&
         selectedNeuron.layerIndex === layer.index && selectedNeuron.index === i}
       hovered={hoveredNeuron !== undefined &&
         hoveredNeuron.layerIndex === layer.index && hoveredNeuron.index === i}
-      dimmed={dimmedNeurons}
       label={`${layer.label}, neuron ${i + 1}, activation ${neuron.output.toFixed(3)}`}
       onSelect={() => onSelectNeuron(layer.index, i)}
       onHover={() => onHoverNeuron(layer.index, i)}

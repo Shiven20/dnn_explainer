@@ -24,6 +24,7 @@
   import { animation, STATUS, PHASE, easeInOut } from '../animation.js';
 
   import { computeLayout } from '../engine/layout.js';
+  import { traceUpstream, traceConnectionUpstream } from '../engine/forwardPass.js';
 
   export let showValues = true;
 
@@ -166,6 +167,64 @@
 
   const connectionKey = (c) => `${c.targetLayerIndex}:${c.sourceIndex}:${c.targetIndex}`;
 
+  // ---------------------------------------------------------------- upstream trace
+  /*
+   * When something is selected, trace every connection that fed into it, back to
+   * the input layer. This answers "where did this value come from?" -- the honest
+   * answer being a whole subgraph, since each contributing neuron had its own
+   * contributors.
+   *
+   * Recomputed only on selection or network change, not on hover.
+   */
+  $: trace = (() => {
+    if (net === undefined) return undefined;
+
+    if ($selectedConnection !== undefined) {
+      return traceConnectionUpstream(
+        net,
+        $selectedConnection.targetLayerIndex,
+        $selectedConnection.sourceIndex,
+        $selectedConnection.targetIndex
+      );
+    }
+
+    if ($selectedNeuron !== undefined && $selectedNeuron.layerIndex > 0) {
+      return traceUpstream(net, $selectedNeuron.layerIndex, $selectedNeuron.index);
+    }
+
+    return undefined;
+  })();
+
+  /** Connections that carry a value into the selection. */
+  const isTraceActive = (c) =>
+    trace !== undefined && trace.active.has(connectionKey(c));
+
+  /** Structurally upstream, but carrying nothing for the current input. */
+  const isTraceInactive = (c) =>
+    trace !== undefined && trace.inactive.has(connectionKey(c));
+
+  /** The specific connection the user selected, emphasised above its trace. */
+  const isTraceSelf = (c) =>
+    trace !== undefined && trace.self === connectionKey(c);
+
+  /**
+   * Neurons that participate in the trace, so the contributing path reads as a
+   * connected route rather than a set of unrelated lines.
+   */
+  $: tracedNeurons = (() => {
+    if (trace === undefined) return undefined;
+    const set = new Set();
+    trace.active.forEach((key) => {
+      const [l, s, t] = key.split(':').map(Number);
+      set.add(`${l - 1}:${s}`);
+      set.add(`${l}:${t}`);
+    });
+    return set;
+  })();
+
+  const isNeuronTraced = (layerIndex, index) =>
+    tracedNeurons !== undefined && tracedNeurons.has(`${layerIndex}:${index}`);
+
   const isConnectionHighlighted = (c) => {
     if ($selectedConnection !== undefined) {
       return (
@@ -185,6 +244,12 @@
     // During the walkthrough, dim everything except the hop in flight so the
     // eye follows one step at a time.
     if (isWalkthrough) return !isConnectionActive(c);
+
+    // With a trace open, anything outside the contributing subgraph recedes.
+    if (trace !== undefined) {
+      return !isTraceActive(c) && !isTraceInactive(c);
+    }
+
     return (focus !== undefined || $selectedConnection !== undefined) &&
       !isConnectionHighlighted(c);
   };
@@ -323,7 +388,9 @@
             magnitude={$weightMagnitude}
             radius={layout.neuronRadius}
             highlighted={isConnectionHighlighted(c) || isConnectionActive(c) ||
-              hoveredConnectionId === connectionKey(c)}
+              hoveredConnectionId === connectionKey(c) || isTraceActive(c)}
+            selected={isTraceSelf(c)}
+            muted={isTraceInactive(c)}
             dimmed={isConnectionDimmed(c) && hoveredConnectionId !== connectionKey(c)}
           />
         {/each}
@@ -383,6 +450,9 @@
           {showValues}
           pending={isLayerPending(l)}
           settling={isLayerSettling(l)}
+          isOutsideTrace={tracedNeurons !== undefined
+            ? (index) => !isNeuronTraced(l, index)
+            : undefined}
           selectedNeuron={$selectedNeuron}
           hoveredNeuron={$hoveredNeuron}
           onSelectNeuron={selectNeuron}
@@ -394,9 +464,20 @@
   {/if}
 </div>
 
-<p class="affordance">
-  Click a <span class="strong">neuron</span> to see how its value was computed, or
-  click any <span class="strong">connecting line</span> to adjust its weight.
-</p>
+{#if trace !== undefined}
+  <!-- Explain the trace, including what the dashed lines mean, since a dashed
+       upstream line looks like an error otherwise. -->
+  <p class="affordance">
+    Showing every connection that fed this value, back to the input layer:
+    <span class="strong">{trace.active.size} carrying a value</span>{#if trace.inactive.size > 0},
+    and {trace.inactive.size} dashed line{trace.inactive.size === 1 ? '' : 's'}
+    that contribute nothing for this input{/if}.
+  </p>
+{:else}
+  <p class="affordance">
+    Click a <span class="strong">neuron</span> to see how its value was computed, or
+    click any <span class="strong">connecting line</span> to adjust its weight.
+  </p>
+{/if}
 
 <div class="scroll-hint">Scroll sideways to see the full network</div>
