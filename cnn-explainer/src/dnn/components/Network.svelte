@@ -24,6 +24,7 @@
   import { animation, STATUS, PHASE, easeInOut } from '../animation.js';
 
   import { computeLayout } from '../engine/layout.js';
+  import { traceUpstream, traceConnectionUpstream } from '../engine/forwardPass.js';
 
   export let showValues = true;
 
@@ -146,6 +147,84 @@
   const isConnectionActive = (c) =>
     isWalkthrough && anim.phase === PHASE.TRAVEL && c.targetLayerIndex === anim.frontier;
 
+  /**
+   * The connection under the pointer.
+   *
+   * Without this there is no feedback that a line is clickable at all, which is
+   * the main reason the weight editor was hard to discover.
+   */
+  let hoveredConnectionId;
+
+  const connectionAreaMoved = (event) => {
+    const target = event.target;
+    const attr = target && target.getAttribute && target.getAttribute('data-connection');
+    hoveredConnectionId = attr ? attr : undefined;
+  };
+
+  const connectionAreaLeft = () => {
+    hoveredConnectionId = undefined;
+  };
+
+  const connectionKey = (c) => `${c.targetLayerIndex}:${c.sourceIndex}:${c.targetIndex}`;
+
+  // ---------------------------------------------------------------- upstream trace
+  /*
+   * When something is selected, trace every connection that fed into it, back to
+   * the input layer. This answers "where did this value come from?" -- the honest
+   * answer being a whole subgraph, since each contributing neuron had its own
+   * contributors.
+   *
+   * Recomputed only on selection or network change, not on hover.
+   */
+  $: trace = (() => {
+    if (net === undefined) return undefined;
+
+    if ($selectedConnection !== undefined) {
+      return traceConnectionUpstream(
+        net,
+        $selectedConnection.targetLayerIndex,
+        $selectedConnection.sourceIndex,
+        $selectedConnection.targetIndex
+      );
+    }
+
+    if ($selectedNeuron !== undefined && $selectedNeuron.layerIndex > 0) {
+      return traceUpstream(net, $selectedNeuron.layerIndex, $selectedNeuron.index);
+    }
+
+    return undefined;
+  })();
+
+  /** Connections that carry a value into the selection. */
+  const isTraceActive = (c) =>
+    trace !== undefined && trace.active.has(connectionKey(c));
+
+  /** Structurally upstream, but carrying nothing for the current input. */
+  const isTraceInactive = (c) =>
+    trace !== undefined && trace.inactive.has(connectionKey(c));
+
+  /** The specific connection the user selected, emphasised above its trace. */
+  const isTraceSelf = (c) =>
+    trace !== undefined && trace.self === connectionKey(c);
+
+  /**
+   * Neurons that participate in the trace, so the contributing path reads as a
+   * connected route rather than a set of unrelated lines.
+   */
+  $: tracedNeurons = (() => {
+    if (trace === undefined) return undefined;
+    const set = new Set();
+    trace.active.forEach((key) => {
+      const [l, s, t] = key.split(':').map(Number);
+      set.add(`${l - 1}:${s}`);
+      set.add(`${l}:${t}`);
+    });
+    return set;
+  })();
+
+  const isNeuronTraced = (layerIndex, index) =>
+    tracedNeurons !== undefined && tracedNeurons.has(`${layerIndex}:${index}`);
+
   const isConnectionHighlighted = (c) => {
     if ($selectedConnection !== undefined) {
       return (
@@ -165,6 +244,12 @@
     // During the walkthrough, dim everything except the hop in flight so the
     // eye follows one step at a time.
     if (isWalkthrough) return !isConnectionActive(c);
+
+    // With a trace open, anything outside the contributing subgraph recedes.
+    if (trace !== undefined) {
+      return !isTraceActive(c) && !isTraceInactive(c);
+    }
+
     return (focus !== undefined || $selectedConnection !== undefined) &&
       !isConnectionHighlighted(c);
   };
@@ -180,13 +265,18 @@
    * per path. Which connection was hit is read back from a data attribute.
    */
   const connectionAreaClicked = (event) => {
-    const hit = event.target.closest('[data-connection]');
-    if (hit === null) return;
+    /*
+     * The clicked path carries the attribute itself, so read it directly rather
+     * than walking ancestors with closest(): closest() is unreliable on SVG
+     * elements in some browsers, and there is no ancestor to find here anyway.
+     */
+    const target = event.target;
+    if (target === undefined || target === null) return;
+    const attr = target.getAttribute && target.getAttribute('data-connection');
+    if (!attr) return;
+
     event.stopPropagation();
-    const [targetLayerIndex, sourceIndex, targetIndex] = hit
-      .getAttribute('data-connection')
-      .split(':')
-      .map(Number);
+    const [targetLayerIndex, sourceIndex, targetIndex] = attr.split(':').map(Number);
     selectConnection(targetLayerIndex, sourceIndex, targetIndex);
   };
 </script>
@@ -211,9 +301,17 @@
     fill: transparent;
   }
 
+  /*
+   * Invisible click targets for the connections.
+   *
+   * `pointer-events: stroke` is essential: the default (visiblePainted) will not
+   * reliably hit-test a `transparent` stroke, so without this the clicks are
+   * silently swallowed and the connection never opens.
+   */
   .hit {
     fill: none;
     stroke: transparent;
+    pointer-events: stroke;
     cursor: pointer;
   }
 
@@ -226,6 +324,21 @@
     color: var(--dnn-muted, #64748b);
     padding: 4px 2px 0 2px;
     text-align: center;
+  }
+
+  /* Tells the user the lines are interactive. Without this the weight editor is
+     effectively invisible: nothing suggests a connection can be clicked. */
+  .affordance {
+    font-size: 12px;
+    color: var(--dnn-muted, #64748b);
+    text-align: center;
+    padding: 7px 2px 0 2px;
+    line-height: 1.5;
+  }
+
+  .affordance .strong {
+    color: var(--dnn-ink, #1f2933);
+    font-weight: 600;
   }
 
   @media (min-width: 900px) {
@@ -274,8 +387,11 @@
             weight={c.weight}
             magnitude={$weightMagnitude}
             radius={layout.neuronRadius}
-            highlighted={isConnectionHighlighted(c) || isConnectionActive(c)}
-            dimmed={isConnectionDimmed(c)}
+            highlighted={isConnectionHighlighted(c) || isConnectionActive(c) ||
+              hoveredConnectionId === connectionKey(c) || isTraceActive(c)}
+            selected={isTraceSelf(c)}
+            muted={isTraceInactive(c)}
+            dimmed={isConnectionDimmed(c) && hoveredConnectionId !== connectionKey(c)}
           />
         {/each}
       </g>
@@ -306,11 +422,17 @@
         the same information through a neuron's incoming-connection list in the
         inspection panel.
       -->
-      <g class="hit-targets" aria-hidden="true" on:click={connectionAreaClicked}>
+      <g
+        class="hit-targets"
+        aria-hidden="true"
+        on:click={connectionAreaClicked}
+        on:mousemove={connectionAreaMoved}
+        on:mouseleave={connectionAreaLeft}
+      >
         {#each connections as c (`hit-${c.id}`)}
           <path
             class="hit"
-            data-connection={`${c.targetLayerIndex}:${c.sourceIndex}:${c.targetIndex}`}
+            data-connection={connectionKey(c)}
             d={`M ${c.source.x} ${c.source.y} L ${c.target.x} ${c.target.y}`}
             stroke-width={hitStrokeWidth}
           />
@@ -328,6 +450,9 @@
           {showValues}
           pending={isLayerPending(l)}
           settling={isLayerSettling(l)}
+          isOutsideTrace={tracedNeurons !== undefined
+            ? (index) => !isNeuronTraced(l, index)
+            : undefined}
           selectedNeuron={$selectedNeuron}
           hoveredNeuron={$hoveredNeuron}
           onSelectNeuron={selectNeuron}
@@ -338,5 +463,21 @@
     </svg>
   {/if}
 </div>
+
+{#if trace !== undefined}
+  <!-- Explain the trace, including what the dashed lines mean, since a dashed
+       upstream line looks like an error otherwise. -->
+  <p class="affordance">
+    Showing every connection that fed this value, back to the input layer:
+    <span class="strong">{trace.active.size} carrying a value</span>{#if trace.inactive.size > 0},
+    and {trace.inactive.size} dashed line{trace.inactive.size === 1 ? '' : 's'}
+    that contribute nothing for this input{/if}.
+  </p>
+{:else}
+  <p class="affordance">
+    Click a <span class="strong">neuron</span> to see how its value was computed, or
+    click any <span class="strong">connecting line</span> to adjust its weight.
+  </p>
+{/if}
 
 <div class="scroll-hint">Scroll sideways to see the full network</div>

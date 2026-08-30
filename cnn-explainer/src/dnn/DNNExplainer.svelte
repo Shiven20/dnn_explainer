@@ -18,8 +18,8 @@
   import FlowStepper from './components/FlowStepper.svelte';
 
   import {
-    activatedNetwork, prediction, parameterCount, weightMagnitude, spec,
-    selectedNeuron, selectedConnection, reseedNetwork
+    activatedNetwork, prediction, parameterCount, spec,
+    selectedNeuron, selectedConnection
   } from './stores.js';
 
   import {
@@ -55,6 +55,36 @@
 
   // Release the frame loop when the page unmounts.
   onDestroy(destroyAnimation);
+
+  /*
+   * Scroll the inspection panel into view when a selection opens.
+   *
+   * The rail now stacks several panels, so on a short viewport a newly opened
+   * breakdown can appear above the fold and look like nothing happened -- which
+   * is exactly how the weight editor came across as missing.
+   */
+  let railEl;
+  let lastSelectionKey = '';
+
+  $: {
+    const key = $selectedNeuron !== undefined
+      ? `n-${$selectedNeuron.layerIndex}-${$selectedNeuron.index}`
+      : $selectedConnection !== undefined
+        ? `c-${$selectedConnection.targetLayerIndex}-${$selectedConnection.sourceIndex}-${$selectedConnection.targetIndex}`
+        : '';
+
+    if (key !== '' && key !== lastSelectionKey && railEl !== undefined) {
+      // Wait for the panel to mount before scrolling to it.
+      requestAnimationFrame(() => {
+        if (railEl === undefined) return;
+        const panel = railEl.firstElementChild;
+        if (panel && typeof panel.scrollIntoView === 'function') {
+          panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+      });
+    }
+    lastSelectionKey = key;
+  }
 </script>
 
 <style>
@@ -480,11 +510,11 @@
       {/if}
     </div>
 
-    <div class="side">
+    <div class="side" bind:this={railEl}>
       <!--
-        Inspecting something takes over the rail, because a breakdown is what the
-        user just asked to see. The editors stay reachable underneath rather than
-        being unmounted, so returning to them does not lose scroll position.
+        Inspecting something takes over the top of the rail, because a breakdown
+        is what the user just asked to see. The editors stay mounted underneath so
+        returning to them does not lose scroll position.
       -->
       {#if $selectedNeuron !== undefined}
         <NeuronDetails
