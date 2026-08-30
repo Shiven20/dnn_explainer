@@ -372,13 +372,14 @@
             <span class="meta-label">Parameters</span>
             <span class="meta-value">{$parameterCount}</span>
           </div>
-          <!-- The weights are random, so the class names carry no real meaning
-               yet. Saying so is more honest than letting the UI imply otherwise. -->
+          <!-- This network has never seen a dataset. The badge is explicit about
+               that, because a confident-looking percentage otherwise implies a
+               competence the model does not have. -->
           <span
             class="badge"
-            title="Weights are randomly initialised, so the class names are placeholders. Training arrives in a later phase."
+            title="This network has never been trained on any data. Its weights are random numbers, so the outputs are arithmetic on arbitrary values — not recognition of anything."
           >
-            Untrained
+            Untrained · random weights
           </span>
         </div>
 
@@ -423,7 +424,8 @@
             {#if outputRevealed}
               <span class="prediction-value">{$prediction.label}</span>
               <span class="prediction-note">
-                highest of {$prediction.classes.length} output values
+                simply the largest of the {$prediction.classes.length} output
+                values — it carries no meaning until the network is trained
               </span>
             {:else}
               <!-- Withheld until propagation reaches the output layer, so the
@@ -503,8 +505,10 @@
       <div class="guide-step">Step 4</div>
       <div class="guide-title">Output decides</div>
       <p class="guide-text">
-        The final layer produces one value per class. Softmax turns those into
-        percentages, and the largest becomes the prediction.
+        The final layer produces one value per output. Softmax turns those into
+        percentages, and the largest becomes the prediction. In a trained network
+        each output would correspond to a real category; here they are just
+        positions, since nothing has been learned yet.
       </p>
     </div>
   </div>

@@ -78,7 +78,4 @@
     </div>
   </div>
 
-  <a href="https://github.com/poloclub/cnn-explainer" target="_blank" rel="noreferrer">
-    Based on CNN Explainer
-  </a>
 </header>
