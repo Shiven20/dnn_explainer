@@ -289,7 +289,18 @@ for (const label of ['Input', 'Hidden Layer 1', 'Hidden Layer 2', 'Output']) {
   check(`layer label "${label}" is present`, text.includes(label));
 }
 check('prediction section is present', text.includes('Prediction'));
-check('class labels are present', text.includes('Cat') && text.includes('Dog'));
+check('output labels are present',
+  text.includes('Output A') && text.includes('Output B'));
+
+/*
+ * The network is untrained, so the UI must not name its outputs after real
+ * categories. A confident percentage next to "Cat" claims recognition the model
+ * cannot perform.
+ */
+check('does not claim to recognise real categories',
+  !text.includes('Cat') && !text.includes('Dog'));
+check('discloses that the prediction is not yet meaningful',
+  text.includes('no meaning until the network is trained'));
 check('legend explains the weight encoding',
   text.includes('negative') && text.includes('positive'));
 check('reading guide is present', text.includes('Weights carry influence'));
@@ -308,6 +319,8 @@ check('the core formula is shown',
 
 // The weights are random, so the UI must say so rather than implying meaning.
 check('untrained state is disclosed', text.includes('Untrained'));
+check('untrained badge mentions random weights',
+  text.includes('random weights'));
 
 const rangeInputs = all.filter((n) =>
   n.nodeName === 'input' && n.getAttribute('type') === 'range');

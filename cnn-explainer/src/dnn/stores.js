@@ -24,7 +24,16 @@ export const LIMITS = {
 export const clamp = (value, { min, max }) => Math.max(min, Math.min(max, value));
 
 const DEFAULT_INPUTS = [0.8, 0.25, 0.6, 0.1];
-const DEFAULT_LABELS = ['Cat', 'Dog'];
+
+/*
+ * Output labels are deliberately neutral.
+ *
+ * This network is untrained and has never seen any dataset, so naming the
+ * outputs after real categories ("Cat", "Dog") would claim a capability that
+ * does not exist: the outputs are just two numbers, and the larger one wins.
+ * Concrete labels can be introduced once training makes them mean something.
+ */
+const DEFAULT_LABELS = ['Output A', 'Output B'];
 
 /**
  * The editable specification. The network itself is derived from this, which
