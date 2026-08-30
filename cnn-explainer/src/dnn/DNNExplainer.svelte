@@ -13,6 +13,9 @@
   import PlaybackControls from './components/PlaybackControls.svelte';
   import NeuronDetails from './components/NeuronDetails.svelte';
   import ConnectionDetails from './components/ConnectionDetails.svelte';
+  import ActivationPanel from './components/ActivationPanel.svelte';
+  import ArchitecturePanel from './components/ArchitecturePanel.svelte';
+  import FlowStepper from './components/FlowStepper.svelte';
 
   import {
     activatedNetwork, prediction, parameterCount, weightMagnitude, spec,
@@ -177,6 +180,12 @@
     background: var(--dnn-surface-sunken);
   }
 
+  .flow-row {
+    margin-top: 12px;
+    padding-top: 11px;
+    border-top: 1px solid var(--dnn-border);
+  }
+
   .stage-body { padding: 6px 10px 12px 10px; }
 
   .toggle {
@@ -292,6 +301,19 @@
 
   .side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 
+  /* The rail now holds several panels, so on tall viewports it sticks and
+     scrolls independently rather than dragging the whole page down. */
+  @media (min-width: 941px) {
+    .side {
+      position: sticky;
+      top: 72px;
+      max-height: calc(100vh - 88px);
+      overflow-y: auto;
+      /* Room for the scrollbar so panel borders are not clipped. */
+      padding-right: 4px;
+    }
+  }
+
   .reading-guide {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
@@ -391,6 +413,11 @@
 
       <div class="controls-bar">
         <PlaybackControls {layerCount} {layerLabels} />
+
+        <!-- Explicit stage sequence, so it is obvious which hop is underway. -->
+        <div class="flow-row">
+          <FlowStepper layers={net ? net.layers : []} />
+        </div>
       </div>
 
       <div class="stage-body">
@@ -455,9 +482,9 @@
 
     <div class="side">
       <!--
-        The inspection panel replaces the input editor while something is
-        selected. They compete for the same column, and showing both at once in
-        a 270px rail makes each of them cramped.
+        Inspecting something takes over the rail, because a breakdown is what the
+        user just asked to see. The editors stay reachable underneath rather than
+        being unmounted, so returning to them does not lose scroll position.
       -->
       {#if $selectedNeuron !== undefined}
         <NeuronDetails
@@ -470,9 +497,11 @@
           sourceIndex={$selectedConnection.sourceIndex}
           targetIndex={$selectedConnection.targetIndex}
         />
-      {:else}
-        <InputPanel />
       {/if}
+
+      <InputPanel />
+      <ActivationPanel />
+      <ArchitecturePanel />
     </div>
   </div>
 

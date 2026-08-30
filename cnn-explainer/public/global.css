@@ -20,6 +20,7 @@
 
 	/* Accents */
 	--dnn-accent: rgb(47, 109, 246);
+	--dnn-accent-wash: rgba(47, 109, 246, 0.08);
 	--dnn-positive: rgb(47, 109, 246);
 	--dnn-negative: rgb(225, 76, 66);
 	--dnn-neuron-ring: rgb(148, 163, 184);
@@ -52,6 +53,7 @@
 		--dnn-muted: rgb(148, 163, 184);
 
 		--dnn-accent: rgb(96, 149, 255);
+		--dnn-accent-wash: rgba(96, 149, 255, 0.14);
 		--dnn-positive: rgb(96, 149, 255);
 		--dnn-negative: rgb(240, 113, 103);
 		--dnn-neuron-ring: rgb(100, 116, 139);
