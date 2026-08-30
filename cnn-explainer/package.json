@@ -25,8 +25,9 @@
     "test:animation": "node dnn-mlp/test-animation.mjs",
     "test:inspection": "node dnn-mlp/test-inspection.mjs",
     "test:panels": "node dnn-mlp/test-panels.mjs",
+    "test:phase4": "node dnn-mlp/test-phase4.mjs",
     "test:render": "node dnn-mlp/smoke-render.mjs",
-    "test": "node dnn-mlp/test-engine.mjs && node dnn-mlp/test-animation.mjs && node dnn-mlp/test-inspection.mjs && node dnn-mlp/test-panels.mjs",
+    "test": "node dnn-mlp/test-engine.mjs && node dnn-mlp/test-animation.mjs && node dnn-mlp/test-inspection.mjs && node dnn-mlp/test-panels.mjs && node dnn-mlp/test-phase4.mjs",
     "start": "sirv public --single",
     "start:dev": "sirv public --single --dev --port 3000"
   }

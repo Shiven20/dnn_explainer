@@ -338,6 +338,45 @@ check('sliders are labelled',
 const liveRegions = all.filter((n) => n.getAttribute && n.getAttribute('aria-live'));
 check('playback status is announced', liveRegions.length > 0);
 
+// ---------------------------------------------------------------- phase 4
+console.log('\nPhase 4 panels');
+
+check('activation panel is present', text.includes('Activation function'));
+for (const label of ['ReLU', 'Sigmoid', 'Tanh', 'Linear']) {
+  check(`activation option "${label}" is offered`, text.includes(label));
+}
+check('activation formula is shown', text.includes('max(0, x)'));
+check('activation output range is reported', text.includes('Output range'));
+check('dead-unit count is reported', text.includes('Hidden neurons at zero'));
+
+check('architecture panel is present', text.includes('Architecture'));
+check('input neuron control is present', text.includes('Input neurons'));
+check('hidden layer control is present', text.includes('Hidden layers'));
+check('output neuron control is present', text.includes('Output neurons'));
+check('per-layer widths are listed', text.includes('Neurons per hidden layer'));
+check('parameter count is shown', text.includes('learnable parameters'));
+check('weight reseed control is present', text.includes('New weights'));
+
+// The steppers must be real, labelled buttons.
+const stepperButtons = all.filter((n) => {
+  const label = n.getAttribute && n.getAttribute('aria-label');
+  return n.nodeName === 'button' && label &&
+    (label.startsWith('Add ') || label.startsWith('Remove '));
+});
+// 3 global controls x2, plus 2 hidden layers x2 = 10.
+check('architecture steppers are labelled buttons',
+  stepperButtons.length >= 10, `${stepperButtons.length} steppers`);
+
+// The flow strip must show the stage sequence.
+check('flow stepper shows the input stage', text.includes('Input'));
+check('flow stepper shows abbreviated hidden stages',
+  text.includes('H1') && text.includes('H2'));
+check('flow stepper is described for assistive tech',
+  all.some((n) => {
+    const label = n.getAttribute && n.getAttribute('aria-label');
+    return label && label.includes('Forward pass stages');
+  }));
+
 // The diagram must show live numbers, not placeholders.
 const hasPercent = /\d+%/.test(text);
 check('computed percentages are displayed', hasPercent);

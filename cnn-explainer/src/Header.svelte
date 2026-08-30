@@ -46,15 +46,6 @@
     gap: 9px;
   }
 
-  a {
-    font-size: 13px;
-    color: var(--dnn-muted);
-    text-decoration: none;
-    white-space: nowrap;
-  }
-
-  a:hover { color: var(--dnn-accent); }
-
   @media (max-width: 620px) {
     header { padding: 0 16px; }
     .tagline { display: none; }
