@@ -15,6 +15,8 @@
   import ActivationGraph from './ActivationGraph.svelte';
   import { formatValue } from '../engine/layout.js';
 
+  export let disabled = false;
+
   $: current = getActivation($spec.hiddenActivation);
 
   /*
@@ -189,6 +191,7 @@
         class="option"
         class:active={$spec.hiddenActivation === id}
         aria-pressed={$spec.hiddenActivation === id}
+        disabled={disabled}
         on:click={() => setHiddenActivation(id)}
       >{activations[id].label}</button>
     {/each}

@@ -1,10 +1,7 @@
 <script>
   /**
-   * Phase 2 shell: the network diagram, an editable input vector, and an
-   * animated forward pass.
-   *
-   * The animation reveals a result that has already been computed rather than
-   * driving the computation, so the values on screen are always the real ones.
+   * Phase 5 shell: interactive forward propagation, inspection, architecture
+   * controls, and browser-only backpropagation training over one shared network.
    */
   import { onDestroy } from 'svelte';
 
@@ -15,11 +12,12 @@
   import ConnectionDetails from './components/ConnectionDetails.svelte';
   import ActivationPanel from './components/ActivationPanel.svelte';
   import ArchitecturePanel from './components/ArchitecturePanel.svelte';
+  import TrainingPanel from './components/TrainingPanel.svelte';
   import FlowStepper from './components/FlowStepper.svelte';
 
   import {
-    activatedNetwork, prediction, parameterCount, spec,
-    selectedNeuron, selectedConnection
+    activatedNetwork, prediction, parameterCount, spec, training,
+    selectedNeuron, selectedConnection, destroyTraining
   } from './stores.js';
 
   import {
@@ -53,8 +51,11 @@
     lastInputSignature = signature;
   }
 
-  // Release the frame loop when the page unmounts.
-  onDestroy(destroyAnimation);
+  // Release animation and training loops when the page unmounts.
+  onDestroy(() => {
+    destroyAnimation();
+    destroyTraining();
+  });
 
   /*
    * Scroll the inspection panel into view when a selection opens.
@@ -424,14 +425,15 @@
             <span class="meta-label">Parameters</span>
             <span class="meta-value">{$parameterCount}</span>
           </div>
-          <!-- This network has never seen a dataset. The badge is explicit about
-               that, because a confident-looking percentage otherwise implies a
-               competence the model does not have. -->
+          <!-- Labels stay neutral before learning; once backpropagation starts,
+               the badge and output names identify the honest synthetic task. -->
           <span
             class="badge"
-            title="This network has never been trained on any data. Its weights are random numbers, so the outputs are arithmetic on arbitrary values — not recognition of anything."
+            title={$training.epoch > 0
+              ? 'These weights have been updated by backpropagation on the synthetic two-pattern dataset.'
+              : 'This network has not been trained yet. Its outputs are arithmetic on random values.'}
           >
-            Untrained · random weights
+            {$training.epoch > 0 ? `Training · epoch ${$training.epoch}` : 'Untrained · random weights'}
           </span>
         </div>
 
@@ -481,8 +483,12 @@
             {#if outputRevealed}
               <span class="prediction-value">{$prediction.label}</span>
               <span class="prediction-note">
-                simply the largest of the {$prediction.classes.length} output
-                values — it carries no meaning until the network is trained
+                {#if $training.epoch > 0}
+                  the largest softmax output; training gives it meaning for the synthetic pattern task
+                {:else}
+                  simply the largest of the {$prediction.classes.length} output
+                  values — it carries no meaning until the network is trained
+                {/if}
               </span>
             {:else}
               <!-- Withheld until propagation reaches the output layer, so the
@@ -530,8 +536,9 @@
       {/if}
 
       <InputPanel />
-      <ActivationPanel />
-      <ArchitecturePanel />
+      <TrainingPanel />
+      <ActivationPanel disabled={$training.initialNetwork !== undefined} />
+      <ArchitecturePanel disabled={$training.initialNetwork !== undefined} />
     </div>
   </div>
 
@@ -573,8 +580,8 @@
   </div>
 
   <p class="next-note">
-    Click any neuron to see exactly how its value was computed, or click a
-    connection to inspect and edit its weight. The activation switcher and
-    architecture controls arrive in the next phase.
+    Phase 5 connects the full learning loop: the synthetic examples run forward,
+    cross-entropy measures error, backpropagation computes gradients, and the same
+    visible weights are updated. Click a line at any time to inspect its learned value.
   </p>
 </div>

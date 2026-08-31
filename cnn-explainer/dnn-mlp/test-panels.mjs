@@ -31,6 +31,7 @@ class El {
     this.style = makeStyle();
     this.parentNode = null;
     this.textContent_ = '';
+    this.listeners = {};
   }
   appendChild(c) { c.parentNode = this; this.childNodes.push(c); return c; }
   insertBefore(c, ref) {
@@ -48,8 +49,23 @@ class El {
   setAttribute(k, v) { this.attributes[k] = String(v); }
   getAttribute(k) { return this.attributes[k] ?? null; }
   removeAttribute(k) { delete this.attributes[k]; }
-  addEventListener() {}
-  removeEventListener() {}
+  addEventListener(type, fn) {
+    if (this.listeners[type] === undefined) this.listeners[type] = [];
+    this.listeners[type].push(fn);
+  }
+  removeEventListener(type, fn) {
+    this.listeners[type] = (this.listeners[type] || []).filter((item) => item !== fn);
+  }
+  dispatchEvent(event) {
+    if (event.target === undefined) event.target = this;
+    event.currentTarget = this;
+    if (event.stopPropagation === undefined) {
+      event.stopPropagation = () => { event.cancelBubble = true; };
+    }
+    (this.listeners[event.type] || []).forEach((fn) => fn(event));
+    if (!event.cancelBubble && this.parentNode) this.parentNode.dispatchEvent(event);
+    return true;
+  }
   set textContent(v) { this.textContent_ = String(v); this.childNodes = []; }
   get textContent() {
     const own = this.innerHTML_
@@ -390,6 +406,27 @@ check('re-selecting the same connection deselects it', selConn === undefined);
 stores.selectNeuron(1, 1);
 stores.clearSelection();
 check('clearSelection clears both', selNeuron === undefined && selConn === undefined);
+
+// Mount the real SVG and dispatch a click from its wide transparent hit path.
+// This proves browser event delegation reaches selectConnection; it does not
+// merely call the store action directly.
+console.log('\nReal SVG connection click');
+const diagram = await mount('dnn/components/Network.svelte', { showValues: true });
+let hitPath;
+(function walk(n) {
+  if (hitPath === undefined && n.nodeName === 'path' &&
+      n.getAttribute('data-connection') === '1:2:0') hitPath = n;
+  n.childNodes.forEach(walk);
+})(diagram.target);
+check('network renders the expected wide hit path', hitPath !== undefined);
+if (hitPath !== undefined) {
+  hitPath.dispatchEvent({ type: 'click' });
+  check('dispatching the SVG path click selects its connection',
+    selConn !== undefined && selConn.targetLayerIndex === 1 &&
+    selConn.sourceIndex === 2 && selConn.targetIndex === 0);
+}
+diagram.instance.$destroy();
+stores.clearSelection();
 
 console.log(
   failures === 0

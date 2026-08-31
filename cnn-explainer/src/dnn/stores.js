@@ -12,6 +12,9 @@ import { writable, derived } from 'svelte/store';
 import { createNetwork, resizeNetwork, setWeight, setBias, getWeightMagnitude, countParameters } from './engine/network.js';
 import { forwardPass, getPrediction, getActivationRanges } from './engine/forwardPass.js';
 import { RELU, SOFTMAX } from './engine/activations.js';
+import {
+  cloneNetwork, createPatternDataset, evaluateDataset, trainEpoch
+} from './engine/training.js';
 
 /** Architecture limits, kept modest so the SVG stays readable and fast. */
 export const LIMITS = {
@@ -187,6 +190,8 @@ export const reseedNetwork = (seed = Math.floor(Math.random() * 100000)) => {
 
 /** Restore the initial demo configuration. */
 export const resetAll = () => {
+  clearTrainingTimer();
+  training.set(initialTrainingState());
   spec.set({
     inputSize: 4,
     hiddenSizes: [5, 5],
@@ -237,6 +242,111 @@ export const weightMagnitude = derived(networkInternal, (net) =>
 );
 
 export const parameterCount = derived(networkInternal, (net) => countParameters(net));
+
+// ------------------------------------------------------------------ training
+
+export const TRAINING_STATUS = {
+  IDLE: 'idle',
+  RUNNING: 'running',
+  PAUSED: 'paused'
+};
+
+const initialTrainingState = () => ({
+  status: TRAINING_STATUS.IDLE,
+  epoch: 0,
+  learningRate: 0.08,
+  loss: undefined,
+  accuracy: undefined,
+  history: [],
+  initialNetwork: undefined
+});
+
+export const training = writable(initialTrainingState());
+
+let currentTraining = initialTrainingState();
+training.subscribe((value) => { currentTraining = value; });
+
+const trainingDataset = () => createPatternDataset(currentSpec.inputSize);
+
+export const setLearningRate = (value) => {
+  const rate = Math.max(0.001, Math.min(1, Number(value)));
+  if (!Number.isFinite(rate)) return;
+  training.update((state) => ({ ...state, learningRate: rate }));
+};
+
+/** Apply one real full-batch backpropagation update to the rendered network. */
+export const trainOneEpoch = () => {
+  const dataset = trainingDataset();
+  const beforeNetwork = currentNetwork;
+  const result = trainEpoch(beforeNetwork, dataset, currentTraining.learningRate);
+  spec.update((s) => ({ ...s, labels: ['Pattern A', 'Pattern B'] }));
+  networkInternal.set(result.network);
+  training.update((state) => {
+    const history = [...state.history, result.after.loss].slice(-60);
+    return {
+      ...state,
+      epoch: state.epoch + 1,
+      loss: result.after.loss,
+      accuracy: result.after.accuracy,
+      history,
+      initialNetwork: state.initialNetwork === undefined
+        ? cloneNetwork(beforeNetwork)
+        : state.initialNetwork
+    };
+  });
+  return result.after;
+};
+
+let trainingTimer;
+
+const clearTrainingTimer = () => {
+  if (trainingTimer !== undefined) {
+    clearInterval(trainingTimer);
+    trainingTimer = undefined;
+  }
+};
+
+export const startTraining = () => {
+  if (currentTraining.status === TRAINING_STATUS.RUNNING) return;
+  if (currentTraining.initialNetwork === undefined) {
+    const metrics = evaluateDataset(currentNetwork, trainingDataset());
+    training.update((state) => ({
+      ...state,
+      status: TRAINING_STATUS.RUNNING,
+      loss: metrics.loss,
+      accuracy: metrics.accuracy,
+      initialNetwork: cloneNetwork(currentNetwork)
+    }));
+  } else {
+    training.update((state) => ({ ...state, status: TRAINING_STATUS.RUNNING }));
+  }
+  clearTrainingTimer();
+  trainingTimer = setInterval(trainOneEpoch, 120);
+};
+
+export const pauseTraining = () => {
+  clearTrainingTimer();
+  training.update((state) => ({
+    ...state,
+    status: state.epoch > 0 ? TRAINING_STATUS.PAUSED : TRAINING_STATUS.IDLE
+  }));
+};
+
+export const resetTraining = () => {
+  clearTrainingTimer();
+  if (currentTraining.initialNetwork !== undefined) {
+    networkInternal.set(cloneNetwork(currentTraining.initialNetwork));
+  }
+  spec.update((s) => ({
+    ...s,
+    labels: Array.from({ length: s.outputSize }, (_, i) =>
+      DEFAULT_LABELS[i] !== undefined ? DEFAULT_LABELS[i] : `Output ${i + 1}`)
+  }));
+  const rate = currentTraining.learningRate;
+  training.set({ ...initialTrainingState(), learningRate: rate });
+};
+
+export const destroyTraining = () => clearTrainingTimer();
 
 // ------------------------------------------------------------------ selection
 
