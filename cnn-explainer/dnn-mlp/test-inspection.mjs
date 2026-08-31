@@ -13,7 +13,7 @@ import {
 } from '../src/dnn/engine/network.js';
 
 import {
-  forwardPass, explainNeuron, getPrediction
+  forwardPass, explainNeuron, getPrediction, traceUpstream, traceConnectionUpstream
 } from '../src/dnn/engine/forwardPass.js';
 
 import { getActivation, RELU, SIGMOID, TANH, SOFTMAX } from '../src/dnn/engine/activations.js';
@@ -254,6 +254,27 @@ check('largest architecture explains a deep neuron',
   bigDetail.terms.length === 12 &&
   near(bigDetail.terms.reduce((a, t) => a + t.product, 0) + bigDetail.bias,
        bigDetail.preActivation));
+
+// ---------------------------------------------------------------- upstream tracing
+console.log('\nUpstream connection tracing');
+const outputTrace = traceUpstream(net, 2, 0);
+check('output trace reaches both preceding connection layers',
+  outputTrace.layers.includes(1) && outputTrace.layers.includes(2));
+check('trace keys contain no duplicates',
+  outputTrace.active.size === new Set(outputTrace.active).size &&
+  outputTrace.inactive.size === new Set(outputTrace.inactive).size);
+check('zero-weight and dead-source paths are inactive',
+  outputTrace.inactive.has('1:0:2') && outputTrace.inactive.has('2:1:0'));
+
+const firstHop = traceConnectionUpstream(net, 1, 2, 0);
+check('a first-layer connection includes itself', firstHop.self === '1:2:0' &&
+  (firstHop.active.has(firstHop.self) || firstHop.inactive.has(firstHop.self)));
+check('a first-layer connection has no earlier connection layer',
+  firstHop.layers.length === 1 && firstHop.layers[0] === 1);
+
+const selectedOutputConnection = traceConnectionUpstream(net, 2, 0, 0);
+check('selected deep connection traces through to inputs',
+  selectedOutputConnection.layers.includes(1) && selectedOutputConnection.layers.includes(2));
 
 console.log(
   failures === 0
