@@ -18,6 +18,7 @@
   import {
     activatedNetwork, activationRanges, weightMagnitude,
     selectedNeuron, selectedConnection, hoveredNeuron,
+    trainingWalkthrough, WALKTHROUGH_PHASE,
     selectNeuron, selectConnection, clearSelection
   } from '../stores.js';
 
@@ -147,6 +148,18 @@
   const isConnectionActive = (c) =>
     isWalkthrough && anim.phase === PHASE.TRAVEL && c.targetLayerIndex === anim.frontier;
 
+  // Phase 6 uses real batch gradients but reveals them one layer at a time.
+  $: trainingFlow = $trainingWalkthrough;
+  const connectionTrainingState = (c) => {
+    if (trainingFlow.phase === WALKTHROUGH_PHASE.FORWARD) return 'forward';
+    if (trainingFlow.phase === WALKTHROUGH_PHASE.LOSS &&
+        net !== undefined && c.targetLayerIndex === net.layers.length - 1) return 'loss';
+    if (trainingFlow.phase === WALKTHROUGH_PHASE.BACKPROP &&
+        c.targetLayerIndex === trainingFlow.backwardLayer) return 'backprop';
+    if (trainingFlow.phase === WALKTHROUGH_PHASE.UPDATE) return 'update';
+    return undefined;
+  };
+
   /**
    * The connection under the pointer.
    *
@@ -241,6 +254,17 @@
   };
 
   const isConnectionDimmed = (c) => {
+    // The active training stage takes visual priority over hover/trace dimming.
+    const trainingState = connectionTrainingState(c);
+    if (trainingFlow.phase === WALKTHROUGH_PHASE.FORWARD) return false;
+    if (trainingFlow.phase === WALKTHROUGH_PHASE.LOSS) {
+      return trainingState === undefined;
+    }
+    if (trainingFlow.phase === WALKTHROUGH_PHASE.BACKPROP) {
+      return trainingState === undefined;
+    }
+    if (trainingFlow.phase === WALKTHROUGH_PHASE.UPDATE) return false;
+
     // During the walkthrough, dim everything except the hop in flight so the
     // eye follows one step at a time.
     if (isWalkthrough) return !isConnectionActive(c);
@@ -391,6 +415,7 @@
               hoveredConnectionId === connectionKey(c) || isTraceActive(c)}
             selected={isTraceSelf(c)}
             muted={isTraceInactive(c)}
+            trainingState={connectionTrainingState(c)}
             dimmed={isConnectionDimmed(c) && hoveredConnectionId !== connectionKey(c)}
           />
         {/each}
@@ -464,7 +489,18 @@
   {/if}
 </div>
 
-{#if trace !== undefined}
+{#if trainingFlow.phase === WALKTHROUGH_PHASE.BACKPROP}
+  <p class="affordance">
+    Backpropagation is carrying real gradients right-to-left through
+    <span class="strong">layer {trainingFlow.backwardLayer}</span>. Purple dashed lines
+    show the parameters whose gradients are being explained.
+  </p>
+{:else if trainingFlow.phase === WALKTHROUGH_PHASE.UPDATE}
+  <p class="affordance">
+    <span class="strong">Weight update applied.</span> Green lines are the same
+    connections after gradient descent changed their values.
+  </p>
+{:else if trace !== undefined}
   <!-- Explain the trace, including what the dashed lines mean, since a dashed
        upstream line looks like an error otherwise. -->
   <p class="affordance">

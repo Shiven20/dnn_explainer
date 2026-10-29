@@ -13,7 +13,8 @@ import { createNetwork, resizeNetwork, setWeight, setBias, getWeightMagnitude, c
 import { forwardPass, getPrediction, getActivationRanges } from './engine/forwardPass.js';
 import { RELU, SOFTMAX } from './engine/activations.js';
 import {
-  cloneNetwork, createPatternDataset, evaluateDataset, trainEpoch
+  cloneNetwork, computeGradients, createPatternDataset, evaluateDataset,
+  summarizeGradients, summarizeWeightUpdates, trainEpoch
 } from './engine/training.js';
 
 /** Architecture limits, kept modest so the SVG stays readable and fast. */
@@ -191,6 +192,9 @@ export const reseedNetwork = (seed = Math.floor(Math.random() * 100000)) => {
 /** Restore the initial demo configuration. */
 export const resetAll = () => {
   clearTrainingTimer();
+  clearWalkthroughTimer();
+  walkthroughTransaction = undefined;
+  trainingWalkthrough.set(initialWalkthroughState());
   training.set(initialTrainingState());
   spec.set({
     inputSize: 4,
@@ -258,7 +262,8 @@ const initialTrainingState = () => ({
   loss: undefined,
   accuracy: undefined,
   history: [],
-  initialNetwork: undefined
+  initialNetwork: undefined,
+  initialInputs: undefined
 });
 
 export const training = writable(initialTrainingState());
@@ -274,26 +279,29 @@ export const setLearningRate = (value) => {
   training.update((state) => ({ ...state, learningRate: rate }));
 };
 
+const rememberTrainingStart = () => {
+  if (currentTraining.initialNetwork !== undefined) return;
+  training.update((state) => ({
+    ...state,
+    initialNetwork: cloneNetwork(currentNetwork),
+    initialInputs: [...currentSpec.inputs]
+  }));
+};
+
 /** Apply one real full-batch backpropagation update to the rendered network. */
 export const trainOneEpoch = () => {
+  rememberTrainingStart();
   const dataset = trainingDataset();
-  const beforeNetwork = currentNetwork;
-  const result = trainEpoch(beforeNetwork, dataset, currentTraining.learningRate);
+  const result = trainEpoch(currentNetwork, dataset, currentTraining.learningRate);
   spec.update((s) => ({ ...s, labels: ['Pattern A', 'Pattern B'] }));
   networkInternal.set(result.network);
-  training.update((state) => {
-    const history = [...state.history, result.after.loss].slice(-60);
-    return {
-      ...state,
-      epoch: state.epoch + 1,
-      loss: result.after.loss,
-      accuracy: result.after.accuracy,
-      history,
-      initialNetwork: state.initialNetwork === undefined
-        ? cloneNetwork(beforeNetwork)
-        : state.initialNetwork
-    };
-  });
+  training.update((state) => ({
+    ...state,
+    epoch: state.epoch + 1,
+    loss: result.after.loss,
+    accuracy: result.after.accuracy,
+    history: [...state.history, result.after.loss].slice(-60)
+  }));
   return result.after;
 };
 
@@ -306,47 +314,192 @@ const clearTrainingTimer = () => {
   }
 };
 
+export const WALKTHROUGH_PHASE = {
+  IDLE: 'idle',
+  FORWARD: 'forward',
+  LOSS: 'loss',
+  BACKPROP: 'backprop',
+  UPDATE: 'update',
+  COMPLETE: 'complete'
+};
+
+export const WALKTHROUGH_STATUS = {
+  IDLE: 'idle',
+  RUNNING: 'running',
+  PAUSED: 'paused',
+  FINISHED: 'finished'
+};
+
+const initialWalkthroughState = () => ({
+  status: WALKTHROUGH_STATUS.IDLE,
+  phase: WALKTHROUGH_PHASE.IDLE,
+  step: 0,
+  backwardLayer: undefined,
+  target: undefined,
+  targetLabel: undefined,
+  probabilities: [],
+  prediction: undefined,
+  sampleLoss: undefined,
+  batchLoss: undefined,
+  gradientLayers: [],
+  updates: []
+});
+
+export const trainingWalkthrough = writable(initialWalkthroughState());
+let currentWalkthrough = initialWalkthroughState();
+let walkthroughTransaction;
+let walkthroughTimer;
+trainingWalkthrough.subscribe((value) => { currentWalkthrough = value; });
+
+const clearWalkthroughTimer = () => {
+  if (walkthroughTimer !== undefined) {
+    clearTimeout(walkthroughTimer);
+    walkthroughTimer = undefined;
+  }
+};
+
+const reducedMotion = () => typeof window !== 'undefined' &&
+  typeof window.matchMedia === 'function' &&
+  window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const applyWalkthroughUpdate = () => {
+  if (walkthroughTransaction === undefined || walkthroughTransaction.applied) return;
+  walkthroughTransaction.applied = true;
+  const result = walkthroughTransaction.result;
+  networkInternal.set(result.network);
+  training.update((state) => ({
+    ...state,
+    epoch: state.epoch + 1,
+    loss: result.after.loss,
+    accuracy: result.after.accuracy,
+    history: [...state.history, result.after.loss].slice(-60)
+  }));
+};
+
+export const nextTrainingStage = () => {
+  clearWalkthroughTimer();
+  const state = currentWalkthrough;
+  if (state.phase === WALKTHROUGH_PHASE.IDLE || state.phase === WALKTHROUGH_PHASE.COMPLETE) return;
+
+  if (state.phase === WALKTHROUGH_PHASE.FORWARD) {
+    trainingWalkthrough.set({ ...state, phase: WALKTHROUGH_PHASE.LOSS, step: 2 });
+  } else if (state.phase === WALKTHROUGH_PHASE.LOSS) {
+    trainingWalkthrough.set({ ...state, phase: WALKTHROUGH_PHASE.BACKPROP, step: 3,
+      backwardLayer: currentNetwork.layers.length - 1 });
+  } else if (state.phase === WALKTHROUGH_PHASE.BACKPROP && state.backwardLayer > 1) {
+    trainingWalkthrough.set({ ...state, backwardLayer: state.backwardLayer - 1 });
+  } else if (state.phase === WALKTHROUGH_PHASE.BACKPROP) {
+    applyWalkthroughUpdate();
+    trainingWalkthrough.set({ ...state, phase: WALKTHROUGH_PHASE.UPDATE, step: 4,
+      backwardLayer: undefined });
+  } else if (state.phase === WALKTHROUGH_PHASE.UPDATE) {
+    trainingWalkthrough.set({ ...state, phase: WALKTHROUGH_PHASE.COMPLETE, step: 4,
+      status: WALKTHROUGH_STATUS.FINISHED });
+  }
+};
+
+const scheduleWalkthrough = () => {
+  clearWalkthroughTimer();
+  if (currentWalkthrough.status !== WALKTHROUGH_STATUS.RUNNING) return;
+  walkthroughTimer = setTimeout(() => {
+    nextTrainingStage();
+    if (currentWalkthrough.phase !== WALKTHROUGH_PHASE.COMPLETE) scheduleWalkthrough();
+  }, 1150);
+};
+
+export const startTrainingWalkthrough = () => {
+  if (currentSpec.outputSize !== 2) return;
+  clearTrainingTimer();
+  clearWalkthroughTimer();
+  rememberTrainingStart();
+
+  const dataset = trainingDataset();
+  const sample = dataset[0];
+  const sampleResult = computeGradients(currentNetwork, sample.inputs, sample.target);
+  const result = trainEpoch(currentNetwork, dataset, currentTraining.learningRate);
+  walkthroughTransaction = { result, applied: false };
+  spec.update((s) => ({ ...s, inputs: [...sample.inputs], labels: ['Pattern A', 'Pattern B'] }));
+
+  trainingWalkthrough.set({
+    ...initialWalkthroughState(),
+    status: reducedMotion() ? WALKTHROUGH_STATUS.PAUSED : WALKTHROUGH_STATUS.RUNNING,
+    phase: WALKTHROUGH_PHASE.FORWARD,
+    step: 1,
+    target: sample.target,
+    targetLabel: sample.target === 0 ? 'Pattern A' : 'Pattern B',
+    probabilities: sampleResult.probabilities,
+    prediction: sampleResult.prediction,
+    sampleLoss: sampleResult.loss,
+    batchLoss: result.before.loss,
+    gradientLayers: summarizeGradients(result.gradients, result.gradientScale),
+    updates: summarizeWeightUpdates(currentNetwork, result.network)
+  });
+  if (!reducedMotion()) scheduleWalkthrough();
+};
+
+export const pauseTrainingWalkthrough = () => {
+  if (currentWalkthrough.status !== WALKTHROUGH_STATUS.RUNNING) return;
+  clearWalkthroughTimer();
+  trainingWalkthrough.update((state) => ({ ...state, status: WALKTHROUGH_STATUS.PAUSED }));
+};
+
+export const resumeTrainingWalkthrough = () => {
+  if (currentWalkthrough.status !== WALKTHROUGH_STATUS.PAUSED) return;
+  trainingWalkthrough.update((state) => ({ ...state, status: WALKTHROUGH_STATUS.RUNNING }));
+  scheduleWalkthrough();
+};
+
+export const skipTrainingWalkthrough = () => {
+  if (currentWalkthrough.phase === WALKTHROUGH_PHASE.IDLE) return;
+  clearWalkthroughTimer();
+  applyWalkthroughUpdate();
+  trainingWalkthrough.update((state) => ({ ...state,
+    status: WALKTHROUGH_STATUS.FINISHED, phase: WALKTHROUGH_PHASE.COMPLETE,
+    step: 4, backwardLayer: undefined }));
+};
+
+export const resetTrainingWalkthrough = () => {
+  clearWalkthroughTimer();
+  walkthroughTransaction = undefined;
+  trainingWalkthrough.set(initialWalkthroughState());
+};
+
 export const startTraining = () => {
   if (currentTraining.status === TRAINING_STATUS.RUNNING) return;
-  if (currentTraining.initialNetwork === undefined) {
-    const metrics = evaluateDataset(currentNetwork, trainingDataset());
-    training.update((state) => ({
-      ...state,
-      status: TRAINING_STATUS.RUNNING,
-      loss: metrics.loss,
-      accuracy: metrics.accuracy,
-      initialNetwork: cloneNetwork(currentNetwork)
-    }));
-  } else {
-    training.update((state) => ({ ...state, status: TRAINING_STATUS.RUNNING }));
-  }
+  resetTrainingWalkthrough();
+  rememberTrainingStart();
+  const metrics = evaluateDataset(currentNetwork, trainingDataset());
+  training.update((state) => ({ ...state, status: TRAINING_STATUS.RUNNING,
+    loss: state.loss === undefined ? metrics.loss : state.loss,
+    accuracy: state.accuracy === undefined ? metrics.accuracy : state.accuracy }));
   clearTrainingTimer();
   trainingTimer = setInterval(trainOneEpoch, 120);
 };
 
 export const pauseTraining = () => {
   clearTrainingTimer();
-  training.update((state) => ({
-    ...state,
-    status: state.epoch > 0 ? TRAINING_STATUS.PAUSED : TRAINING_STATUS.IDLE
-  }));
+  training.update((state) => ({ ...state,
+    status: state.epoch > 0 ? TRAINING_STATUS.PAUSED : TRAINING_STATUS.IDLE }));
 };
 
 export const resetTraining = () => {
   clearTrainingTimer();
+  resetTrainingWalkthrough();
   if (currentTraining.initialNetwork !== undefined) {
     networkInternal.set(cloneNetwork(currentTraining.initialNetwork));
   }
-  spec.update((s) => ({
-    ...s,
+  spec.update((s) => ({ ...s,
+    inputs: currentTraining.initialInputs === undefined ? s.inputs : [...currentTraining.initialInputs],
     labels: Array.from({ length: s.outputSize }, (_, i) =>
-      DEFAULT_LABELS[i] !== undefined ? DEFAULT_LABELS[i] : `Output ${i + 1}`)
-  }));
+      DEFAULT_LABELS[i] !== undefined ? DEFAULT_LABELS[i] : `Output ${i + 1}`) }));
   const rate = currentTraining.learningRate;
   training.set({ ...initialTrainingState(), learningRate: rate });
 };
 
-export const destroyTraining = () => clearTrainingTimer();
+export const destroyTraining = () => {
+  clearTrainingTimer();
+  clearWalkthroughTimer();
+};
 
 // ------------------------------------------------------------------ selection
 

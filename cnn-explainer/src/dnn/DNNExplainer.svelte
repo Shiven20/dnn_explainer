@@ -1,7 +1,7 @@
 <script>
   /**
-   * Phase 5 shell: interactive forward propagation, inspection, architecture
-   * controls, and browser-only backpropagation training over one shared network.
+   * Phase 6 shell: interactive forward propagation, inspection, architecture
+   * controls, browser-only training, and a staged learning walkthrough.
    */
   import { onDestroy } from 'svelte';
 
@@ -580,8 +580,8 @@
   </div>
 
   <p class="next-note">
-    Phase 5 connects the full learning loop: the synthetic examples run forward,
-    cross-entropy measures error, backpropagation computes gradients, and the same
-    visible weights are updated. Click a line at any time to inspect its learned value.
+    Phase 6 makes the learning loop inspectable: advance through the real forward
+    prediction, cross-entropy loss, layer-by-layer gradients, and final parameter
+    update. Click any changed line afterward to inspect its learned weight.
   </p>
 </div>

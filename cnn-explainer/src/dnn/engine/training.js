@@ -116,7 +116,44 @@ export const trainEpoch = (network, dataset, learningRate = 0.08) => {
     addGradients(gradients, computeGradients(network, example.inputs, example.target).gradients);
   });
   const next = applyGradients(network, gradients, learningRate, 1 / dataset.length);
-  return { network: next, before, after: evaluateDataset(next, dataset) };
+  return {
+    network: next,
+    before,
+    after: evaluateDataset(next, dataset),
+    gradients,
+    gradientScale: 1 / dataset.length
+  };
+};
+
+/** Condense a full gradient tensor into honest per-layer values for the UI. */
+export const summarizeGradients = (gradients, scale = 1) =>
+  gradients.map((layer, layerIndex) => {
+    if (layerIndex === 0) return { layerIndex, meanAbsolute: 0, maxAbsolute: 0, count: 0 };
+    const values = [];
+    layer.biases.forEach((value) => values.push(value * scale));
+    layer.weights.forEach((row) => row.forEach((value) => values.push(value * scale)));
+    const absolute = values.map(Math.abs);
+    return {
+      layerIndex,
+      meanAbsolute: absolute.reduce((sum, value) => sum + value, 0) / absolute.length,
+      maxAbsolute: Math.max(...absolute),
+      count: values.length
+    };
+  });
+
+/** Largest real parameter changes, useful for explaining the update step. */
+export const summarizeWeightUpdates = (before, after, limit = 4) => {
+  const updates = [];
+  for (let l = 1; l < before.layers.length; l++) {
+    before.layers[l].neurons.forEach((neuron, targetIndex) => {
+      neuron.weights.forEach((weight, sourceIndex) => {
+        const next = after.layers[l].neurons[targetIndex].weights[sourceIndex];
+        updates.push({ layerIndex: l, sourceIndex, targetIndex, before: weight,
+          after: next, change: next - weight });
+      });
+    });
+  }
+  return updates.sort((a, b) => Math.abs(b.change) - Math.abs(a.change)).slice(0, limit);
 };
 
 /**

@@ -26,31 +26,43 @@
    * present but distinguishable from a live contribution.
    */
   export let muted = false;
+  /** Educational training phase currently emphasizing this connection. */
+  export let trainingState = undefined;
 
   $: path = connectionPath(source, target, radius);
 
   $: stroke = selected
     ? 'var(--dnn-accent, #2f6df6)'
-    : highlighted
-      ? connectionColor(weight, magnitude)
-      : connectionColor(weight, magnitude);
+    : trainingState === 'backprop'
+      ? '#8b5cf6'
+      : trainingState === 'update'
+        ? '#16a36a'
+        : trainingState === 'loss'
+          ? '#d97706'
+          : trainingState === 'forward'
+            ? 'var(--dnn-accent, #2f6df6)'
+            : highlighted
+              ? connectionColor(weight, magnitude)
+              : connectionColor(weight, magnitude);
 
   $: strokeWidth = selected
     ? Math.max(3, connectionWidth(weight, magnitude) + 1)
-    : highlighted
-      ? Math.max(2, connectionWidth(weight, magnitude))
-      : connectionWidth(weight, magnitude);
+    : trainingState !== undefined
+      ? Math.max(2.2, connectionWidth(weight, magnitude))
+      : highlighted
+        ? Math.max(2, connectionWidth(weight, magnitude))
+        : connectionWidth(weight, magnitude);
 
   $: opacity = dimmed
     ? 0.05
     : muted
       ? 0.28
-      : selected || highlighted
+      : selected || highlighted || trainingState !== undefined
         ? 0.95
         : connectionOpacity(weight, magnitude);
 
-  // Dashes mark a connection that exists but is not carrying anything.
-  $: dashArray = muted ? '3 3' : null;
+  // Backpropagation travels opposite the forward signal and is dashed.
+  $: dashArray = trainingState === 'backprop' ? '6 3' : muted ? '3 3' : null;
 </script>
 
 <style>
