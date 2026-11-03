@@ -1,6 +1,6 @@
 <script>
   import {
-    spec, training, trainingWalkthrough, TRAINING_STATUS,
+    spec, training, trainingWalkthrough, customDataset, TRAINING_STATUS,
     WALKTHROUGH_PHASE, WALKTHROUGH_STATUS, setLearningRate,
     trainOneEpoch, startTraining, pauseTraining, resetTraining,
     startTrainingWalkthrough, pauseTrainingWalkthrough,
@@ -16,7 +16,8 @@
   ];
 
   $: running = $training.status === TRAINING_STATUS.RUNNING;
-  $: canTrain = $spec.outputSize === 2;
+  $: canTrain = $spec.outputSize >= 2;
+  $: usingCustom = $customDataset.active;
   $: walk = $trainingWalkthrough;
   $: walkthroughOpen = walk.phase !== WALKTHROUGH_PHASE.IDLE;
   $: walkthroughActive = walkthroughOpen && walk.phase !== WALKTHROUGH_PHASE.COMPLETE;
@@ -66,8 +67,12 @@
 <section class="panel" aria-label="Training and backpropagation">
   <h2>Training walkthrough · Phase 6</h2>
   <p class="hint">
-    Watch one real epoch progress from prediction to changed weights. Pattern A
-    has larger values in the first input half; Pattern B in the second.
+    {#if usingCustom}
+      Training on custom dataset: {$customDataset.classes.join(', ')}
+    {:else}
+      Watch one real epoch progress from prediction to changed weights. Pattern A
+      has larger values in the first input half; Pattern B in the second.
+    {/if}
   </p>
 
   <div class="flow" aria-label="Training stages">
@@ -83,7 +88,11 @@
     <div class="explain">
       The selected training example is flowing left-to-right through the actual network.
       <span class="math">target = {walk.targetLabel}</span>
-      <span class="math">prediction = Pattern {walk.prediction === 0 ? 'A' : 'B'} ({(walk.probabilities[walk.prediction] * 100).toFixed(1)}%)</span>
+      {#if walk.probabilities.length === 2}
+        <span class="math">prediction = {walk.targetLabel.includes('Pattern') ? `Pattern ${walk.prediction === 0 ? 'A' : 'B'}` : $spec.labels[walk.prediction]} ({(walk.probabilities[walk.prediction] * 100).toFixed(1)}%)</span>
+      {:else}
+        <span class="math">prediction = {$spec.labels[walk.prediction]} ({(walk.probabilities[walk.prediction] * 100).toFixed(1)}%)</span>
+      {/if}
     </div>
   {:else if walk.phase === WALKTHROUGH_PHASE.LOSS}
     <div class="explain">
@@ -155,7 +164,7 @@
   </div>
 
   {#if !canTrain}
-    <p class="warning">The educational task has two classes. Set output neurons to 2 before training.</p>
+    <p class="warning">Classification requires at least 2 output classes. Adjust output neurons before training.</p>
   {:else}
     <p class="note">The network changes only at stage 4. Reduced-motion mode starts paused so each stage can be advanced without animation.</p>
   {/if}

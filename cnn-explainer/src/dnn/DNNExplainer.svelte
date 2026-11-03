@@ -13,6 +13,7 @@
   import ActivationPanel from './components/ActivationPanel.svelte';
   import ArchitecturePanel from './components/ArchitecturePanel.svelte';
   import TrainingPanel from './components/TrainingPanel.svelte';
+  import DatasetPanel from './components/DatasetPanel.svelte';
   import FlowStepper from './components/FlowStepper.svelte';
 
   import {
@@ -536,6 +537,7 @@
       {/if}
 
       <InputPanel />
+      <DatasetPanel />
       <TrainingPanel />
       <ActivationPanel disabled={$training.initialNetwork !== undefined} />
       <ArchitecturePanel disabled={$training.initialNetwork !== undefined} />

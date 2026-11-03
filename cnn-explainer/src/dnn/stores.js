@@ -16,6 +16,7 @@ import {
   cloneNetwork, computeGradients, createPatternDataset, evaluateDataset,
   summarizeGradients, summarizeWeightUpdates, trainEpoch
 } from './engine/training.js';
+import { prepareDataset, DATASET_STATUS } from './engine/dataset.js';
 
 /** Architecture limits, kept modest so the SVG stays readable and fast. */
 export const LIMITS = {
@@ -247,6 +248,65 @@ export const weightMagnitude = derived(networkInternal, (net) =>
 
 export const parameterCount = derived(networkInternal, (net) => countParameters(net));
 
+// ------------------------------------------------------------------ custom dataset
+
+const initialDatasetState = () => ({
+  status: DATASET_STATUS.EMPTY,
+  train: undefined,
+  test: undefined,
+  classes: undefined,
+  stats: undefined,
+  size: undefined,
+  error: undefined,
+  active: false,
+  csvText: undefined
+});
+
+export const customDataset = writable(initialDatasetState());
+
+let currentDataset = initialDatasetState();
+customDataset.subscribe((value) => { currentDataset = value; });
+
+/** Parse and prepare a CSV dataset for training. */
+export const loadDataset = (csvText, trainRatio = 0.8) => {
+  const result = prepareDataset(csvText, trainRatio);
+  customDataset.set({ ...result, csvText, active: currentDataset.active });
+};
+
+/** Switch training to use the uploaded custom dataset. */
+export const useCustomDataset = () => {
+  if (currentDataset.status !== DATASET_STATUS.VALID) return;
+  
+  // Adjust network architecture to match dataset
+  const inputSize = currentDataset.train[0].inputs.length;
+  const outputSize = currentDataset.classes.length;
+  
+  spec.update((s) => {
+    const labels = currentDataset.classes.map(c => c);
+    return { ...s, inputSize, outputSize, labels };
+  });
+  syncNetwork();
+  
+  customDataset.update((state) => ({ ...state, active: true }));
+  
+  // Reset training state when switching datasets
+  clearTrainingTimer();
+  resetTrainingWalkthrough();
+  const rate = currentTraining.learningRate;
+  training.set({ ...initialTrainingState(), learningRate: rate });
+};
+
+/** Switch training back to the synthetic pattern dataset. */
+export const useSyntheticDataset = () => {
+  customDataset.update((state) => ({ ...state, active: false }));
+  
+  // Reset training state when switching datasets
+  clearTrainingTimer();
+  resetTrainingWalkthrough();
+  const rate = currentTraining.learningRate;
+  training.set({ ...initialTrainingState(), learningRate: rate });
+};
+
 // ------------------------------------------------------------------ training
 
 export const TRAINING_STATUS = {
@@ -271,7 +331,12 @@ export const training = writable(initialTrainingState());
 let currentTraining = initialTrainingState();
 training.subscribe((value) => { currentTraining = value; });
 
-const trainingDataset = () => createPatternDataset(currentSpec.inputSize);
+const trainingDataset = () => {
+  if (currentDataset.active && currentDataset.train) {
+    return currentDataset.train;
+  }
+  return createPatternDataset(currentSpec.inputSize);
+};
 
 export const setLearningRate = (value) => {
   const rate = Math.max(0.001, Math.min(1, Number(value)));
@@ -293,7 +358,12 @@ export const trainOneEpoch = () => {
   rememberTrainingStart();
   const dataset = trainingDataset();
   const result = trainEpoch(currentNetwork, dataset, currentTraining.learningRate);
-  spec.update((s) => ({ ...s, labels: ['Pattern A', 'Pattern B'] }));
+  
+  // Update labels only if using synthetic dataset
+  if (!currentDataset.active) {
+    spec.update((s) => ({ ...s, labels: ['Pattern A', 'Pattern B'] }));
+  }
+  
   networkInternal.set(result.network);
   training.update((state) => ({
     ...state,
@@ -408,7 +478,7 @@ const scheduleWalkthrough = () => {
 };
 
 export const startTrainingWalkthrough = () => {
-  if (currentSpec.outputSize !== 2) return;
+  if (currentSpec.outputSize < 2) return;
   clearTrainingTimer();
   clearWalkthroughTimer();
   rememberTrainingStart();
@@ -418,7 +488,16 @@ export const startTrainingWalkthrough = () => {
   const sampleResult = computeGradients(currentNetwork, sample.inputs, sample.target);
   const result = trainEpoch(currentNetwork, dataset, currentTraining.learningRate);
   walkthroughTransaction = { result, applied: false };
-  spec.update((s) => ({ ...s, inputs: [...sample.inputs], labels: ['Pattern A', 'Pattern B'] }));
+  spec.update((s) => ({ ...s, inputs: [...sample.inputs] }));
+  
+  // Update labels only if using synthetic dataset
+  if (!currentDataset.active) {
+    spec.update((s) => ({ ...s, labels: ['Pattern A', 'Pattern B'] }));
+  }
+  
+  const targetLabel = currentDataset.active && currentDataset.classes
+    ? currentDataset.classes[sample.target]
+    : (sample.target === 0 ? 'Pattern A' : 'Pattern B');
 
   trainingWalkthrough.set({
     ...initialWalkthroughState(),
@@ -426,7 +505,7 @@ export const startTrainingWalkthrough = () => {
     phase: WALKTHROUGH_PHASE.FORWARD,
     step: 1,
     target: sample.target,
-    targetLabel: sample.target === 0 ? 'Pattern A' : 'Pattern B',
+    targetLabel,
     probabilities: sampleResult.probabilities,
     prediction: sampleResult.prediction,
     sampleLoss: sampleResult.loss,
