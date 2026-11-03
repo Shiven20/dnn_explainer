@@ -105,6 +105,72 @@ export const evaluateDataset = (network, dataset) => {
   return { loss: loss / dataset.length, accuracy: correct / dataset.length };
 };
 
+/**
+ * Compute per-class precision, recall, F1-score, and confusion matrix.
+ * 
+ * @param {object} network
+ * @param {array} dataset
+ * @param {number} numClasses
+ * @returns {object} perClassMetrics and confusionMatrix
+ */
+export const computeDetailedMetrics = (network, dataset, numClasses) => {
+  if (dataset.length === 0) {
+    return {
+      perClass: Array(numClasses).fill(null).map(() => ({
+        precision: 0, recall: 0, f1: 0, support: 0
+      })),
+      confusionMatrix: Array(numClasses).fill(null).map(() => Array(numClasses).fill(0)),
+      totalCorrect: 0,
+      totalSamples: 0
+    };
+  }
+
+  // Initialize confusion matrix: rows = actual, cols = predicted
+  const confusion = Array(numClasses).fill(null).map(() => Array(numClasses).fill(0));
+
+  dataset.forEach((example) => {
+    const activated = forwardPass(network, example.inputs);
+    const probabilities = activated.layers[activated.layers.length - 1]
+      .neurons.map((neuron) => neuron.output);
+    const predicted = probabilities.indexOf(Math.max(...probabilities));
+    const actual = example.target;
+    confusion[actual][predicted]++;
+  });
+
+  // Compute per-class metrics
+  const perClass = Array(numClasses).fill(null).map((_, classIndex) => {
+    const truePositive = confusion[classIndex][classIndex];
+    const falsePositive = confusion.reduce((sum, row, actualClass) =>
+      sum + (actualClass !== classIndex ? row[classIndex] : 0), 0);
+    const falseNegative = confusion[classIndex].reduce((sum, count, predictedClass) =>
+      sum + (predictedClass !== classIndex ? count : 0), 0);
+    const support = confusion[classIndex].reduce((sum, count) => sum + count, 0);
+
+    const precision = truePositive + falsePositive === 0
+      ? 0
+      : truePositive / (truePositive + falsePositive);
+    const recall = truePositive + falseNegative === 0
+      ? 0
+      : truePositive / (truePositive + falseNegative);
+    const f1 = precision + recall === 0
+      ? 0
+      : (2 * precision * recall) / (precision + recall);
+
+    return { precision, recall, f1, support };
+  });
+
+  const totalCorrect = confusion.reduce((sum, row, i) => sum + row[i], 0);
+  const totalSamples = dataset.length;
+
+  return {
+    perClass,
+    confusionMatrix: confusion,
+    totalCorrect,
+    totalSamples,
+    accuracy: totalCorrect / totalSamples
+  };
+};
+
 /** One full-batch gradient-descent epoch. */
 export const trainEpoch = (network, dataset, learningRate = 0.08) => {
   if (dataset.length === 0) {

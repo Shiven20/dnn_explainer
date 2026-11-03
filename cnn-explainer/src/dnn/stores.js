@@ -14,7 +14,7 @@ import { forwardPass, getPrediction, getActivationRanges } from './engine/forwar
 import { RELU, SOFTMAX } from './engine/activations.js';
 import {
   cloneNetwork, computeGradients, createPatternDataset, evaluateDataset,
-  summarizeGradients, summarizeWeightUpdates, trainEpoch
+  summarizeGradients, summarizeWeightUpdates, trainEpoch, computeDetailedMetrics
 } from './engine/training.js';
 import { prepareDataset, DATASET_STATUS } from './engine/dataset.js';
 
@@ -323,7 +323,8 @@ const initialTrainingState = () => ({
   accuracy: undefined,
   history: [],
   initialNetwork: undefined,
-  initialInputs: undefined
+  initialInputs: undefined,
+  detailedMetrics: undefined
 });
 
 export const training = writable(initialTrainingState());
@@ -365,12 +366,18 @@ export const trainOneEpoch = () => {
   }
   
   networkInternal.set(result.network);
+  
+  // Compute detailed metrics
+  const numClasses = currentSpec.outputSize;
+  const detailedMetrics = computeDetailedMetrics(result.network, dataset, numClasses);
+  
   training.update((state) => ({
     ...state,
     epoch: state.epoch + 1,
     loss: result.after.loss,
     accuracy: result.after.accuracy,
-    history: [...state.history, result.after.loss].slice(-60)
+    history: [...state.history, result.after.loss].slice(-60),
+    detailedMetrics
   }));
   return result.after;
 };

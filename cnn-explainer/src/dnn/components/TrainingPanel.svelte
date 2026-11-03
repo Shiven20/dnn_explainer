@@ -7,6 +7,7 @@
     resumeTrainingWalkthrough, nextTrainingStage, skipTrainingWalkthrough,
     resetTrainingWalkthrough
   } from '../stores.js';
+  import ConfusionMatrix from './ConfusionMatrix.svelte';
 
   const stages = [
     { id: WALKTHROUGH_PHASE.FORWARD, label: 'Forward pass' },
@@ -18,6 +19,7 @@
   $: running = $training.status === TRAINING_STATUS.RUNNING;
   $: canTrain = $spec.outputSize >= 2;
   $: usingCustom = $customDataset.active;
+  $: hasDetailedMetrics = $training.detailedMetrics !== undefined;
   $: walk = $trainingWalkthrough;
   $: walkthroughOpen = walk.phase !== WALKTHROUGH_PHASE.IDLE;
   $: walkthroughActive = walkthroughOpen && walk.phase !== WALKTHROUGH_PHASE.COMPLETE;
@@ -167,5 +169,15 @@
     <p class="warning">Classification requires at least 2 output classes. Adjust output neurons before training.</p>
   {:else}
     <p class="note">The network changes only at stage 4. Reduced-motion mode starts paused so each stage can be advanced without animation.</p>
+  {/if}
+  
+  {#if hasDetailedMetrics && $training.epoch > 0}
+    <div style="margin-top: 16px;">
+      <ConfusionMatrix
+        confusionMatrix={$training.detailedMetrics.confusionMatrix}
+        classLabels={$spec.labels}
+        perClassMetrics={$training.detailedMetrics.perClass}
+      />
+    </div>
   {/if}
 </section>
