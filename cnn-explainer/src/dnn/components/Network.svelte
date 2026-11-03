@@ -59,6 +59,20 @@
 
   $: net = $activatedNetwork;
   $: layout = net ? computeLayout(net, availableWidth) : undefined;
+  $: walk = $trainingWalkthrough;
+
+  /**
+   * Get normalized gradient intensity for a connection (0..1).
+   * Uses 90th percentile for normalization to avoid single outliers dominating.
+   */
+  const getGradientIntensity = (c, gradients, stats) => {
+    if (!gradients || !stats || stats.percentile90 === 0) return 0;
+    const key = `${c.targetLayerIndex}-${c.sourceIndex}-${c.targetIndex}`;
+    const grad = gradients[key];
+    if (grad === undefined) return 0;
+    // Normalize to 90th percentile, cap at 1.0
+    return Math.min(1, grad / stats.percentile90);
+  };
 
   /**
    * Connections for the whole network, flattened for rendering.
@@ -416,6 +430,7 @@
             selected={isTraceSelf(c)}
             muted={isTraceInactive(c)}
             trainingState={connectionTrainingState(c)}
+            gradientIntensity={getGradientIntensity(c, walk.connectionGradients, walk.gradientStats)}
             dimmed={isConnectionDimmed(c) && hoveredConnectionId !== connectionKey(c)}
           />
         {/each}

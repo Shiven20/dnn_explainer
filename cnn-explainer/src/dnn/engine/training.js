@@ -207,6 +207,43 @@ export const summarizeGradients = (gradients, scale = 1) =>
     };
   });
 
+/**
+ * Extract per-connection gradient magnitudes for visualization.
+ * Returns a map keyed by "layerIndex-sourceIndex-targetIndex" with absolute gradient values.
+ */
+export const getConnectionGradients = (gradients, scale = 1) => {
+  const connectionGradients = {};
+  for (let l = 1; l < gradients.length; l++) {
+    gradients[l].weights.forEach((targetWeights, targetIndex) => {
+      targetWeights.forEach((grad, sourceIndex) => {
+        const key = `${l}-${sourceIndex}-${targetIndex}`;
+        connectionGradients[key] = Math.abs(grad * scale);
+      });
+    });
+  }
+  return connectionGradients;
+};
+
+/**
+ * Compute statistics for gradient magnitudes across all connections.
+ * Used to normalize gradient visualization intensity.
+ */
+export const computeGradientStats = (connectionGradients) => {
+  const values = Object.values(connectionGradients);
+  if (values.length === 0) return { min: 0, max: 0, mean: 0, median: 0 };
+  
+  const sorted = [...values].sort((a, b) => a - b);
+  const sum = values.reduce((acc, v) => acc + v, 0);
+  
+  return {
+    min: sorted[0],
+    max: sorted[sorted.length - 1],
+    mean: sum / values.length,
+    median: sorted[Math.floor(sorted.length / 2)],
+    percentile90: sorted[Math.floor(sorted.length * 0.9)]
+  };
+};
+
 /** Largest real parameter changes, useful for explaining the update step. */
 export const summarizeWeightUpdates = (before, after, limit = 4) => {
   const updates = [];

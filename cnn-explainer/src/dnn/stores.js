@@ -14,7 +14,8 @@ import { forwardPass, getPrediction, getActivationRanges } from './engine/forwar
 import { RELU, SOFTMAX } from './engine/activations.js';
 import {
   cloneNetwork, computeGradients, createPatternDataset, evaluateDataset,
-  summarizeGradients, summarizeWeightUpdates, trainEpoch, computeDetailedMetrics
+  summarizeGradients, summarizeWeightUpdates, trainEpoch, computeDetailedMetrics,
+  getConnectionGradients, computeGradientStats
 } from './engine/training.js';
 import { prepareDataset, DATASET_STATUS } from './engine/dataset.js';
 
@@ -419,7 +420,9 @@ const initialWalkthroughState = () => ({
   sampleLoss: undefined,
   batchLoss: undefined,
   gradientLayers: [],
-  updates: []
+  updates: [],
+  connectionGradients: {},
+  gradientStats: { min: 0, max: 0, mean: 0, median: 0, percentile90: 0 }
 });
 
 export const trainingWalkthrough = writable(initialWalkthroughState());
@@ -506,6 +509,10 @@ export const startTrainingWalkthrough = () => {
     ? currentDataset.classes[sample.target]
     : (sample.target === 0 ? 'Pattern A' : 'Pattern B');
 
+  // Compute per-connection gradients for visualization
+  const connectionGradients = getConnectionGradients(result.gradients, result.gradientScale);
+  const gradientStats = computeGradientStats(connectionGradients);
+
   trainingWalkthrough.set({
     ...initialWalkthroughState(),
     status: reducedMotion() ? WALKTHROUGH_STATUS.PAUSED : WALKTHROUGH_STATUS.RUNNING,
@@ -518,7 +525,9 @@ export const startTrainingWalkthrough = () => {
     sampleLoss: sampleResult.loss,
     batchLoss: result.before.loss,
     gradientLayers: summarizeGradients(result.gradients, result.gradientScale),
-    updates: summarizeWeightUpdates(currentNetwork, result.network)
+    updates: summarizeWeightUpdates(currentNetwork, result.network),
+    connectionGradients,
+    gradientStats
   });
   if (!reducedMotion()) scheduleWalkthrough();
 };

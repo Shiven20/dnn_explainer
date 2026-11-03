@@ -6,6 +6,7 @@
    *   colour   -> sign of the weight (blue positive, red negative)
    *   width    -> magnitude, so influential connections read as heavier lines
    *   opacity  -> magnitude, so near-zero weights recede into the background
+   *   glow     -> gradient magnitude during backpropagation (Phase 8)
    */
   import {
     connectionPath, connectionColor, connectionWidth, connectionOpacity
@@ -28,6 +29,8 @@
   export let muted = false;
   /** Educational training phase currently emphasizing this connection. */
   export let trainingState = undefined;
+  /** Gradient magnitude for this connection (0..1 normalized). Phase 8. */
+  export let gradientIntensity = 0;
 
   $: path = connectionPath(source, target, radius);
 
@@ -48,7 +51,7 @@
   $: strokeWidth = selected
     ? Math.max(3, connectionWidth(weight, magnitude) + 1)
     : trainingState !== undefined
-      ? Math.max(2.2, connectionWidth(weight, magnitude))
+      ? Math.max(2.2, connectionWidth(weight, magnitude) + (gradientIntensity * 1.5))
       : highlighted
         ? Math.max(2, connectionWidth(weight, magnitude))
         : connectionWidth(weight, magnitude);
@@ -63,6 +66,10 @@
 
   // Backpropagation travels opposite the forward signal and is dashed.
   $: dashArray = trainingState === 'backprop' ? '6 3' : muted ? '3 3' : null;
+  
+  // Gradient glow during backprop phase
+  $: glowOpacity = trainingState === 'backprop' ? gradientIntensity * 0.6 : 0;
+  $: glowWidth = trainingState === 'backprop' ? strokeWidth + (gradientIntensity * 4) : strokeWidth;
 </script>
 
 <style>
@@ -73,7 +80,24 @@
     transition: opacity 160ms ease-out, stroke-width 160ms ease-out;
     pointer-events: none;
   }
+  
+  .gradient-glow {
+    fill: none;
+    pointer-events: none;
+    filter: blur(3px);
+  }
 </style>
+
+{#if glowOpacity > 0.05}
+  <path
+    class="gradient-glow"
+    d={path}
+    stroke="#a78bfa"
+    stroke-width={glowWidth}
+    opacity={glowOpacity}
+    stroke-dasharray={dashArray}
+  />
+{/if}
 
 <path
   d={path}
@@ -82,3 +106,4 @@
   {opacity}
   stroke-dasharray={dashArray}
 />
+

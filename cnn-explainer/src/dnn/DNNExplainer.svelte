@@ -18,7 +18,8 @@
 
   import {
     activatedNetwork, prediction, parameterCount, spec, training,
-    selectedNeuron, selectedConnection, destroyTraining
+    selectedNeuron, selectedConnection, destroyTraining,
+    trainingWalkthrough, WALKTHROUGH_PHASE
   } from './stores.js';
 
   import {
@@ -475,6 +476,22 @@
           </svg>
           <span>ReLU output is zero</span>
         </div>
+        {#if $trainingWalkthrough.phase === WALKTHROUGH_PHASE.BACKPROP}
+          <div class="legend-item">
+            <svg width="32" height="12" aria-hidden="true">
+              <defs>
+                <filter id="legend-glow">
+                  <feGaussianBlur stdDeviation="1.5" />
+                </filter>
+              </defs>
+              <line x1="4" y1="6" x2="28" y2="6" stroke="#a78bfa" stroke-width="4" 
+                opacity="0.6" filter="url(#legend-glow)" />
+              <line x1="4" y1="6" x2="28" y2="6" stroke="#8b5cf6" stroke-width="2" 
+                stroke-dasharray="4 2" />
+            </svg>
+            <span>Gradient strength (glow intensity)</span>
+          </div>
+        {/if}
       </div>
 
       {#if $prediction !== undefined}
@@ -581,9 +598,5 @@
     </div>
   </div>
 
-  <p class="next-note">
-    Phase 6 makes the learning loop inspectable: advance through the real forward
-    prediction, cross-entropy loss, layer-by-layer gradients, and final parameter
-    update. Click any changed line afterward to inspect its learned weight.
-  </p>
+  
 </div>
