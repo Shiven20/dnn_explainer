@@ -275,7 +275,8 @@
       return trainingState === undefined;
     }
     if (trainingFlow.phase === WALKTHROUGH_PHASE.BACKPROP) {
-      return trainingState === undefined;
+      // Don't dim ANY connections during backprop - show gradient flow clearly
+      return false;
     }
     if (trainingFlow.phase === WALKTHROUGH_PHASE.UPDATE) return false;
 
@@ -402,6 +403,62 @@
         on:click={clearSelection}
         role="presentation"
       />
+
+      <!-- Backpropagation phase indicator -->
+      {#if trainingFlow.phase === WALKTHROUGH_PHASE.BACKPROP}
+        <g class="backprop-indicator">
+          <rect
+            x={layout.padding.left - 20}
+            y="10"
+            width={layout.width - layout.padding.left - layout.padding.right + 40}
+            height="32"
+            fill="#f3e8ff"
+            stroke="#a855f7"
+            stroke-width="2"
+            rx="16"
+            opacity="0.95"
+          />
+          <text
+            x={layout.width / 2}
+            y="30"
+            text-anchor="middle"
+            font-size="14"
+            font-weight="700"
+            fill="#7c3aed"
+            letter-spacing="0.5"
+          >
+            ← BACKPROPAGATION PHASE: Purple lines show gradients flowing RIGHT-TO-LEFT ←
+          </text>
+        </g>
+      {/if}
+
+      <!-- Weight update phase indicator -->
+      {#if trainingFlow.phase === WALKTHROUGH_PHASE.UPDATE}
+        <g class="update-indicator">
+          <rect
+            x={layout.padding.left - 20}
+            y="10"
+            width={layout.width - layout.padding.left - layout.padding.right + 40}
+            height="32"
+            fill="#d1fae5"
+            stroke="#16a36a"
+            stroke-width="2"
+            rx="16"
+            opacity="0.95"
+          />
+          <text
+            x={layout.width / 2}
+            y="30"
+            text-anchor="middle"
+            font-size="14"
+            font-weight="700"
+            fill="#047857"
+            letter-spacing="0.5"
+          >
+            ✓ WEIGHT UPDATE: Green lines show weights being updated by gradient descent ✓
+          </text>
+        </g>
+      {/if}
 
       <!-- Faint band behind the hidden layers, separating them from input/output. -->
       {#if net.layers.length > 2}

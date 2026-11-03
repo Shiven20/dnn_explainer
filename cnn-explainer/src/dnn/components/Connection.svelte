@@ -37,7 +37,7 @@
   $: stroke = selected
     ? 'var(--dnn-accent, #2f6df6)'
     : trainingState === 'backprop'
-      ? '#8b5cf6'
+      ? '#a855f7'  // Brighter purple for better visibility
       : trainingState === 'update'
         ? '#16a36a'
         : trainingState === 'loss'
@@ -50,26 +50,30 @@
 
   $: strokeWidth = selected
     ? Math.max(3, connectionWidth(weight, magnitude) + 1)
-    : trainingState !== undefined
-      ? Math.max(2.2, connectionWidth(weight, magnitude) + (gradientIntensity * 1.5))
-      : highlighted
-        ? Math.max(2, connectionWidth(weight, magnitude))
-        : connectionWidth(weight, magnitude);
+    : trainingState === 'backprop'
+      ? Math.max(3, connectionWidth(weight, magnitude) + (gradientIntensity * 2.5))
+      : trainingState !== undefined
+        ? Math.max(2.2, connectionWidth(weight, magnitude))
+        : highlighted
+          ? Math.max(2, connectionWidth(weight, magnitude))
+          : connectionWidth(weight, magnitude);
 
   $: opacity = dimmed
-    ? 0.05
+    ? 0.08
     : muted
       ? 0.28
-      : selected || highlighted || trainingState !== undefined
-        ? 0.95
-        : connectionOpacity(weight, magnitude);
+      : trainingState === 'backprop'
+        ? 0.95  // Full opacity for backprop
+        : selected || highlighted || trainingState !== undefined
+          ? 0.95
+          : connectionOpacity(weight, magnitude);
 
   // Backpropagation travels opposite the forward signal and is dashed.
-  $: dashArray = trainingState === 'backprop' ? '6 3' : muted ? '3 3' : null;
+  $: dashArray = trainingState === 'backprop' ? '8 4' : muted ? '3 3' : null;
   
-  // Gradient glow during backprop phase
-  $: glowOpacity = trainingState === 'backprop' ? gradientIntensity * 0.6 : 0;
-  $: glowWidth = trainingState === 'backprop' ? strokeWidth + (gradientIntensity * 4) : strokeWidth;
+  // Gradient glow during backprop phase - make it much more visible
+  $: glowOpacity = trainingState === 'backprop' ? Math.max(0.7, gradientIntensity * 0.9) : 0;
+  $: glowWidth = trainingState === 'backprop' ? strokeWidth + (gradientIntensity * 8) : strokeWidth;
 </script>
 
 <style>
@@ -84,7 +88,7 @@
   .gradient-glow {
     fill: none;
     pointer-events: none;
-    filter: blur(3px);
+    filter: blur(4px);
   }
 </style>
 
@@ -92,7 +96,7 @@
   <path
     class="gradient-glow"
     d={path}
-    stroke="#a78bfa"
+    stroke="#c084fc"
     stroke-width={glowWidth}
     opacity={glowOpacity}
     stroke-dasharray={dashArray}
@@ -106,4 +110,5 @@
   {opacity}
   stroke-dasharray={dashArray}
 />
+
 

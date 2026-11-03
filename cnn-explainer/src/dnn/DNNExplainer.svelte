@@ -477,19 +477,19 @@
           <span>ReLU output is zero</span>
         </div>
         {#if $trainingWalkthrough.phase === WALKTHROUGH_PHASE.BACKPROP}
-          <div class="legend-item">
-            <svg width="32" height="12" aria-hidden="true">
+          <div class="legend-item" style="background: #f3e8ff; padding: 6px 10px; border-radius: 6px; border: 1px solid #a855f7;">
+            <svg width="40" height="12" aria-hidden="true">
               <defs>
                 <filter id="legend-glow">
-                  <feGaussianBlur stdDeviation="1.5" />
+                  <feGaussianBlur stdDeviation="2" />
                 </filter>
               </defs>
-              <line x1="4" y1="6" x2="28" y2="6" stroke="#a78bfa" stroke-width="4" 
-                opacity="0.6" filter="url(#legend-glow)" />
-              <line x1="4" y1="6" x2="28" y2="6" stroke="#8b5cf6" stroke-width="2" 
-                stroke-dasharray="4 2" />
+              <line x1="4" y1="6" x2="36" y2="6" stroke="#c084fc" stroke-width="5" 
+                opacity="0.8" filter="url(#legend-glow)" />
+              <line x1="4" y1="6" x2="36" y2="6" stroke="#a855f7" stroke-width="2.5" 
+                stroke-dasharray="6 3" />
             </svg>
-            <span>Gradient strength (glow intensity)</span>
+            <span style="color: #7c3aed; font-weight: 600;">Gradient strength (brighter glow = stronger learning)</span>
           </div>
         {/if}
       </div>
